@@ -824,7 +824,7 @@ TfLiteStatus InterpreterBuilder::ParseNodes(
   TfLiteStatus status = kTfLiteOk;
   //note: andoird log
   // __android_log_print(ANDROID_LOG_INFO, "Ngising", "addnodewithparam");
-  initOpenCL();
+  // initOpenCL();
   for (int i = 0; i < operators->Length(); ++i) {
     const auto* op = operators->Get(i);
     int index = op->opcode_index();
