@@ -296,167 +296,152 @@ inline double get_cpu_time(){
     return (double)clock() / CLOCKS_PER_SEC;
 }
 
-/*
-The application launches a compute shader that renders the mandelbrot set,
-by rendering it into a storage buffer.
-The storage buffer is then read from the GPU, and saved as .png. 
-*/
-class ComputeApplication {
-
-
+class VulkanConvolution {
 private:
-    // // The pixels of the rendered mandelbrot set are in this format:
-    // struct UniformBufferObject {
-    //     int M;
-    //     int K;
-    //     int N;
-    // };
-    // UniformBufferObject matrixSizesStruct;
-    
-    /*
-    In order to use Vulkan, you must create an instance. 
-    */
     VkInstance instance;
-
-    // VkDebugReportCallbackEXT debugReportCallback;
-    /*
-    The physical device is some device on the system that supports usage of Vulkan.
-    Often, it is simply a graphics card that supports Vulkan. 
-    */
-    VkPhysicalDevice physicalDevice;
-    /*
-    Then we have the logical device VkDevice, which basically allows 
-    us to interact with the physical device. 
-    */
+    VkPhysicalDevice physicalDevice; 
     VkDevice device;
-
-    /*
-    The pipeline specifies the pipeline that all graphics and compute commands pass though in Vulkan.
-
-    We will be creating a simple compute pipeline in this application. 
-    */
     VkPipeline pipeline;
     VkPipelineLayout pipelineLayout;
     VkShaderModule computeShaderModule;
-
-    /*
-    The command buffer is used to record commands, that will be submitted to a queue.
-
-    To allocate such command buffers, we use a command pool.
-    */
     VkCommandPool commandPool;
     VkCommandBuffer commandBuffer;
-
-    /*
-
-    Descriptors represent resources in shaders. They allow us to use things like
-    uniform buffers, storage buffers and images in GLSL. 
-
-    A single descriptor represents a single resource, and several descriptors are organized
-    into descriptor sets, which are basically just collections of descriptors.
-    */
     VkDescriptorPool descriptorPool;
     VkDescriptorSet descriptorSet;
     VkDescriptorSetLayout descriptorSetLayout;
-
-    /*
-    The mandelbrot set will be rendered to this buffer.
-
-    The memory that backs the buffer is bufferMemory. 
-    */
     VkBuffer matrixA, matrixB, matrixC, matrixSizes;
-    VkDeviceMemory bufferMemory;
-        
-    uint32_t matrixASize, matrixBSize, matrixCSize, matrixSizesSize; // size of `buffer` in bytes.
-
-    // std::vector<const char *> enabledLayers;
-
-    /*
-    In order to execute commands on a device(GPU), the commands must be submitted
-    to a queue. The commands are stored in a command buffer, and this command buffer
-    is given to the queue. 
-
-    There will be different kinds of queues on the device. Not all queues support
-    graphics operations, for instance. For this application, we at least want a queue
-    that supports compute operations. 
-    */
-    VkQueue queue; // a queue supporting compute operations.
-
-    /*
-    Groups of queues that have the same capabilities(for instance, they all supports graphics and computer operations),
-    are grouped into queue families. 
-    
-    When submitting a command buffer, you must specify to which queue in the family you are submitting to. 
-    This variable keeps track of the index of that queue in its family. 
-    */
+    // VkDeviceMemory bufferMemorymatA, bufferMemorymatB, bufferMemorymatC, bufferMemoryS;
+    VkDeviceMemory bufferMemory;      
+    uint32_t matrixASize, matrixBSize, matrixCSize, matrixSizesSize, inputSize, filterSize, biasSize, outputSize;
+    VkQueue queue; 
     uint32_t queueFamilyIndex;
-    int M,K,N;
-    const float* matA = NULL;
-    const float* matB = NULL;
-    float* matC = NULL;
-
+    float* inputData;
+    float* filterData;
+    float* biasData;
+    float* outputData;
+    int strideWidth = 0;
+    int strideHeight = 0;
+    int padWidth = 0;
+    int padHeight = 0;
+    int* dimSizes;
+    int* dimStrides;
+    float outputActivationMin = 0;
+    float outputActivationMax = 0;
+    VkDebugReportCallbackEXT debugReportCallback;
+    std::vector<const char *> enabledLayers;
+    bool enableValidationLayers = true;
+    
 public:
-    void run(const float* matA0, const float* matB0, float* matC0, int M0, int K0, int N0) {
-        // Buffer size of the storage buffer that will contain the rendered mandelbrot set.
-        matrixASize = (uint32_t) (sizeof(float) * M0 * K0);
-        matrixBSize = (uint32_t) (sizeof(float) * K0 * N0);
-        matrixCSize = (uint32_t) (sizeof(float) * M0 * N0);
-        matrixSizesSize = sizeof(int) * 3;
-        M = M0;
-        K = K0;
-        N = N0;
-        matA = matA0;
-        matB = matB0;
-        matC = matC0;
-        // matrixSizesStruct = {};
-        // matrixSizesStruct.M = 4;
-        // matrixSizesStruct.K = 3;
-        // matrixSizesStruct.N = 2;
+    void run(const float* input_data, const int input_size,
+          const float* filter_data, const int filter_size,
+          const float* bias_data, const int bias_size,
+          float* output_data, const int output_size,
+          int stride_width, int stride_height, 
+          int pad_width, int pad_height, 
+          const int* dim_sizes, const int* dim_strides,
+          float output_activation_min, float output_activation_max) {
+        
+        matrixASize = (uint32_t) (sizeof(float) *dim_sizes[0]*dim_sizes[1]*dim_sizes[2]*dim_sizes[3]);
+        matrixBSize = (uint32_t) (sizeof(float) *((dim_sizes[4]*dim_sizes[5]*dim_sizes[6]*dim_sizes[7]) +
+            (dim_sizes[8]*dim_sizes[9]*dim_sizes[10]*dim_sizes[11]) + 2));
+        matrixCSize = (uint32_t) (sizeof(float) * dim_sizes[12]*dim_sizes[13]*dim_sizes[14]*dim_sizes[15]);
+        matrixSizesSize = sizeof(int) * 39;
+        
+        inputSize = (uint32_t) (sizeof(float)*input_size);
+        filterSize = (uint32_t) (sizeof(float)*filter_size);
+        biasSize = (uint32_t) (sizeof(float)*bias_size);
+        outputSize = (uint32_t) (sizeof(float)*output_size);
 
-        // Initialize vulkan:
+        inputData = (float*) input_data;
+        filterData = (float*) filter_data;
+        biasData = (float*) bias_data;
+        outputData = output_data;
+        strideWidth = stride_width;
+        strideHeight = stride_height;
+        padWidth = pad_width;
+        padHeight = pad_height;
+        dimSizes = (int*) dim_sizes;
+        dimStrides = (int*) dim_strides;
+        outputActivationMin = output_activation_min;
+        outputActivationMax = output_activation_max;
+
         createInstance();
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "createInstance Sukses");
         findPhysicalDevice();
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "findPhysicalDevice Sukses");
         createDevice();
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "createDevice Sukses");
         createBuffer();
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "createBuffer Sukses");
         createDescriptorSetLayout();
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "createDescriptorSetLayout Sukses");
         createDescriptorSet();
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "createDescriptorSet Sukses");
         createComputePipeline();
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "createComputePipeline Sukses");
         createCommandBuffer();
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "createCommandBuffer Sukses");
-
-        // Finally, run the recorded command buffer.
         runCommandBuffer();
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "runCommandBuffer Sukses");
-
         getresult();
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "getresult Sukses");
-
-        // Clean up all vulkan resources.
         cleanup();
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "cleanup Sukses");
     }
 
-    void createInstance() {
+    static VKAPI_ATTR VkBool32 VKAPI_CALL debugReportCallbackFn(
+        VkDebugReportFlagsEXT                       flags,
+        VkDebugReportObjectTypeEXT                  objectType,
+        uint64_t                                    object,
+        size_t                                      location,
+        int32_t                                     messageCode,
+        const char*                                 pLayerPrefix,
+        const char*                                 pMessage,
+        void*                                       pUserData) {
 
-        /*
-        Next, we actually create the instance.
-        
-        */
-        
-        /*
-        Contains application info. This is actually not that important.
-        The only real important field is apiVersion.
-        */
+        __android_log_print(ANDROID_LOG_INFO, "Vulkanerror", "Debug Report: %s: %s\n", pLayerPrefix, pMessage);
+
+        return VK_FALSE;
+     }
+
+
+    void createInstance() {
+        // std::vector<const char *> enabledExtensions;
+        // if (enableValidationLayers) {
+        //     uint32_t layerCount;
+        //     vkEnumerateInstanceLayerProperties(&layerCount, NULL);
+
+        //     std::vector<VkLayerProperties> layerProperties(layerCount);
+        //     vkEnumerateInstanceLayerProperties(&layerCount, layerProperties.data());
+
+        //     bool foundLayer = false;
+        //     for (VkLayerProperties prop : layerProperties) {
+                
+        //         if (strcmp("VK_LAYER_LUNARG_standard_validation", prop.layerName) == 0) {
+        //             foundLayer = true;
+        //             break;
+        //         }
+
+        //     }
+            
+        //     if (!foundLayer) {
+        //         throw std::runtime_error("Layer VK_LAYER_LUNARG_standard_validation not supported\n");
+        //     }
+        //     enabledLayers.push_back("VK_LAYER_LUNARG_standard_validation"); // Alright, we can use this layer.
+            
+        //     uint32_t extensionCount;
+            
+        //     vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, NULL);
+        //     std::vector<VkExtensionProperties> extensionProperties(extensionCount);
+        //     vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, extensionProperties.data());
+
+        //     bool foundExtension = false;
+        //     for (VkExtensionProperties prop : extensionProperties) {
+        //         if (strcmp(VK_EXT_DEBUG_REPORT_EXTENSION_NAME, prop.extensionName) == 0) {
+        //             foundExtension = true;
+        //             break;
+        //         }
+
+        //     }
+
+        //     if (!foundExtension) {
+        //         throw std::runtime_error("Extension VK_EXT_DEBUG_REPORT_EXTENSION_NAME not supported\n");
+        //     }
+        //     enabledExtensions.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
+        // }
+
         VkApplicationInfo applicationInfo = {};
         applicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-        applicationInfo.pApplicationName = "Matrix Multiplication";
+        applicationInfo.pApplicationName = "Matrix Convolution";
         applicationInfo.applicationVersion = 0;
         applicationInfo.pEngineName = "Naive";
         applicationInfo.engineVersion = 0;
@@ -466,58 +451,45 @@ public:
         createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
         createInfo.flags = 0;
         createInfo.pApplicationInfo = &applicationInfo;
-  
-        /*
-        Actually create the instance.
-        Having created the instance, we can actually start using vulkan.
-        */
+
+        // // Give our desired layers and extensions to vulkan.
+        // createInfo.enabledLayerCount = enabledLayers.size();
+        // createInfo.ppEnabledLayerNames = enabledLayers.data();
+        // createInfo.enabledExtensionCount = enabledExtensions.size();
+        // createInfo.ppEnabledExtensionNames = enabledExtensions.data();
+
         VK_CHECK_RESULT(vkCreateInstance(
             &createInfo,
             NULL,
             &instance));
+
+        // if (enableValidationLayers) {
+        //     VkDebugReportCallbackCreateInfoEXT createInfo = {};
+        //     createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
+        //     createInfo.flags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT | VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT;
+        //     createInfo.pfnCallback = &debugReportCallbackFn;
+
+        //     // We have to explicitly load this function.
+        //     auto vkCreateDebugReportCallbackEXT = (PFN_vkCreateDebugReportCallbackEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugReportCallbackEXT");
+        //     if (vkCreateDebugReportCallbackEXT == nullptr) {
+        //         throw std::runtime_error("Could not load vkCreateDebugReportCallbackEXT");
+        //     }
+
+        //     // Create and register callback.
+        //     VK_CHECK_RESULT(vkCreateDebugReportCallbackEXT(instance, &createInfo, NULL, &debugReportCallback));
+        // }
     }
 
     void findPhysicalDevice() {
-        /*
-        In this function, we find a physical device that can be used with Vulkan.
-        */
-
-        /*
-        So, first we will list all physical devices on the system with vkEnumeratePhysicalDevices .
-        */
         uint32_t deviceCount;
         vkEnumeratePhysicalDevices(instance, &deviceCount, NULL);
         if (deviceCount == 0) {
             throw std::runtime_error("could not find a device with vulkan support");
         }
 
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "Device count: %d", deviceCount);
-
         std::vector<VkPhysicalDevice> devices(deviceCount);
         vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
 
-        /*
-        Next, we choose a device that can be used for our purposes. 
-
-        With VkPhysicalDeviceFeatures(), we can retrieve a fine-grained list of physical features supported by the device.
-        However, in this demo, we are simply launching a simple compute shader, and there are no 
-        special physical features demanded for this task.
-
-        With VkPhysicalDeviceProperties(), we can obtain a list of physical device properties. Most importantly,
-        we obtain a list of physical device limitations. For this application, we launch a compute shader,
-        and the maximum size of the workgroups and total number of compute shader invocations is limited by the physical device,
-        and we should ensure that the limitations named maxComputeWorkGroupCount, maxComputeWorkGroupInvocations and 
-        maxComputeWorkGroupSize are not exceeded by our application.  Moreover, we are using a storage buffer in the compute shader,
-        and we should ensure that it is not larger than the device can handle, by checking the limitation maxStorageBufferRange. 
-
-        However, in our application, the workgroup size and total number of shader invocations is relatively small, and the storage buffer is
-        not that large, and thus a vast majority of devices will be able to handle it. This can be verified by looking at some devices at_
-        http://vulkan.gpuinfo.org/
-
-        Therefore, to keep things simple and clean, we will not perform any such checks here, and just pick the first physical
-        device in the list. But in a real and serious application, those limitations should certainly be taken into account.
-
-        */
         for (VkPhysicalDevice device : devices) {
             if (true) { // As above stated, we do no feature checks, so just accept.
                 physicalDevice = device;
@@ -526,23 +498,19 @@ public:
         }
     }
 
-    // Returns the index of a queue family that supports compute operations. 
     uint32_t getComputeQueueFamilyIndex() {
         uint32_t queueFamilyCount;
 
         vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, NULL);
 
-        // Retrieve all queue families.
         std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
         vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilies.data());
 
-        // Now find a family that supports compute.
         uint32_t i = 0;
         for (; i < queueFamilies.size(); ++i) {
             VkQueueFamilyProperties props = queueFamilies[i];
 
             if (props.queueCount > 0 && (props.queueFlags & VK_QUEUE_COMPUTE_BIT)) {
-                // found a queue with compute. We're done!
                 break;
             }
         }
@@ -555,13 +523,6 @@ public:
     }
 
     void createDevice() {
-        /*
-        We create the logical device in this function.
-        */
-
-        /*
-        When creating the device, we also specify what queues it has.
-        */
         VkDeviceQueueCreateInfo queueCreateInfo = {};
         queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
         queueFamilyIndex = getComputeQueueFamilyIndex(); // find queue family with compute capability.
@@ -570,36 +531,27 @@ public:
         float queuePriorities = 1.0;  // we only have one queue, so this is not that imporant. 
         queueCreateInfo.pQueuePriorities = &queuePriorities;
 
-        /*
-        Now we create the logical device. The logical device allows us to interact with the physical
-        device.
-        */
         VkDeviceCreateInfo deviceCreateInfo = {};
 
-        // Specify any desired device features here. We do not need any for this application, though.
         VkPhysicalDeviceFeatures deviceFeatures = {};
 
         deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        // deviceCreateInfo.enabledLayerCount = enabledLayers.size();  // need to specify validation layers here as well.
+        // deviceCreateInfo.ppEnabledLayerNames = enabledLayers.data();
         deviceCreateInfo.pQueueCreateInfos = &queueCreateInfo; // when creating the logical device, we also specify what queues it has.
         deviceCreateInfo.queueCreateInfoCount = 1;
         deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
 
         VK_CHECK_RESULT(vkCreateDevice(physicalDevice, &deviceCreateInfo, NULL, &device)); // create logical device.
 
-        // Get a handle to the only member of the queue family.
         vkGetDeviceQueue(device, queueFamilyIndex, 0, &queue);
     }
 
-    // find memory type with desired properties.
     uint32_t findMemoryType(VkDeviceSize memorySize, VkMemoryPropertyFlags properties) {
         VkPhysicalDeviceMemoryProperties memoryProperties;
 
         vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
 
-        /*
-        How does this search work?
-        See the documentation of VkPhysicalDeviceMemoryProperties for a detailed description. 
-        */
         for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; ++i) {
             if ((memorySize < memoryProperties.memoryHeaps[memoryProperties.memoryTypes[i].heapIndex].size) &&
                 ((memoryProperties.memoryTypes[i].propertyFlags & properties) == properties))
@@ -609,127 +561,146 @@ public:
     }
 
     void createBuffer() {
-        /*
-        We will now create a buffer. We will render the mandelbrot set into this buffer
-        in a computer shade later. 
-        */
-        
         VkBufferCreateInfo matrixACreateInfo = {};
         matrixACreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        matrixACreateInfo.size = matrixASize; // buffer size in bytes. 
+        matrixACreateInfo.size = matrixASize+matrixBSize+matrixCSize; // buffer size in bytes. 
         matrixACreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
         matrixACreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
 
         VK_CHECK_RESULT(vkCreateBuffer(device, &matrixACreateInfo, NULL, &matrixA)); // create buffer.
 
-        VkBufferCreateInfo matrixBCreateInfo = {};
-        matrixACreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        matrixACreateInfo.size = matrixBSize; // buffer size in bytes. 
-        matrixACreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
-        matrixACreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
-
-        VK_CHECK_RESULT(vkCreateBuffer(device, &matrixBCreateInfo, NULL, &matrixB)); // create buffer.
-
-        VkBufferCreateInfo matrixCCreateInfo = {};
-        matrixACreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        matrixACreateInfo.size = matrixCSize; // buffer size in bytes. 
-        matrixACreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
-        matrixACreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
-
-        VK_CHECK_RESULT(vkCreateBuffer(device, &matrixCCreateInfo, NULL, &matrixC)); // create buffer.
-
         VkBufferCreateInfo matrixSizesCreateInfo = {};
-        matrixACreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        matrixACreateInfo.size = matrixSizesSize; // buffer size in bytes. 
-        matrixACreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a uniform buffer.
-        matrixACreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
+        matrixSizesCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        matrixSizesCreateInfo.size = matrixSizesSize; // buffer size in bytes. 
+        matrixSizesCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
+        matrixSizesCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
 
         VK_CHECK_RESULT(vkCreateBuffer(device, &matrixSizesCreateInfo, NULL, &matrixSizes)); // create buffer.
 
-        /*
-        But the buffer doesn't allocate memory for itself, so we must do that manually.
-        */
-    
-        /*
-        First, we find the memory requirements for the buffer.
-        */
-        VkMemoryRequirements memoryRequirementsmatrixA, memoryRequirementsmatrixB, 
-                memoryRequirementsmatrixC, memoryRequirementsmatrixSizes;
-        vkGetBufferMemoryRequirements(device, matrixA, &memoryRequirementsmatrixA);
-        vkGetBufferMemoryRequirements(device, matrixB, &memoryRequirementsmatrixB);
-        vkGetBufferMemoryRequirements(device, matrixC, &memoryRequirementsmatrixC);
-        vkGetBufferMemoryRequirements(device, matrixSizes, &memoryRequirementsmatrixSizes);
-        
-        const VkDeviceSize memorySize = 
-        memoryRequirementsmatrixSizes.size+memoryRequirementsmatrixA.size+memoryRequirementsmatrixB.size+memoryRequirementsmatrixC.size; 
+        // VkBufferCreateInfo matrixSizesCreateInfo = {};
+        // matrixACreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        // matrixACreateInfo.size = matrixSizesSize; // buffer size in bytes. 
+        // matrixACreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a uniform buffer.
+        // matrixACreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
 
-        /*
-        Now use obtained memory requirements info to allocate the memory for the buffer.
-        */
+        // VK_CHECK_RESULT(vkCreateBuffer(device, &matrixSizesCreateInfo, NULL, &matrixSizes)); // create buffer.
+
+        // VkBufferCreateInfo matrixCCreateInfo = {};
+        // matrixACreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        // matrixACreateInfo.size = matrixCSize; // buffer size in bytes. 
+        // matrixACreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
+        // matrixACreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
+
+        // VK_CHECK_RESULT(vkCreateBuffer(device, &matrixCCreateInfo, NULL, &matrixC)); // create buffer.
+        
+        VkMemoryRequirements memoryRequirementsmatrixA, memoryRequirementsmatrixSizes;
+        vkGetBufferMemoryRequirements(device, matrixA, &memoryRequirementsmatrixA);
+        vkGetBufferMemoryRequirements(device, matrixSizes, &memoryRequirementsmatrixSizes);
+
+        // VkMemoryRequirements memoryRequirementsmatrixA, memoryRequirementsmatrixB, 
+        //         memoryRequirementsmatrixC, memoryRequirementsmatrixSizes;
+        // vkGetBufferMemoryRequirements(device, matrixA, &memoryRequirementsmatrixA);
+        // vkGetBufferMemoryRequirements(device, matrixB, &memoryRequirementsmatrixB);
+        // vkGetBufferMemoryRequirements(device, matrixSizes, &memoryRequirementsmatrixSizes);
+        // vkGetBufferMemoryRequirements(device, matrixC, &memoryRequirementsmatrixC);
+        
+        
+        // const VkDeviceSize memorySizematA = memoryRequirementsmatrixA.size;
+        // const VkDeviceSize memorySizematB = memoryRequirementsmatrixB.size;
+        // const VkDeviceSize memorySizematC = memoryRequirementsmatrixC.size; 
+        // const VkDeviceSize memorySizeS = memoryRequirementsmatrixSizes.size;
+        const VkDeviceSize memorySize = memoryRequirementsmatrixA.size+memoryRequirementsmatrixSizes.size;
+
+        // VkMemoryAllocateInfo allocateInfomatA = {};
+        // allocateInfomatA.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        // allocateInfomatA.allocationSize = memorySizematA; // specify required memory.
+
+        // VkMemoryAllocateInfo allocateInfomatB = {};
+        // allocateInfomatB.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        // allocateInfomatB.allocationSize = memorySizematB; // specify required memory.
+
+        // VkMemoryAllocateInfo allocateInfomatC = {};
+        // allocateInfomatC.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        // allocateInfomatC.allocationSize = memorySizematC; // specify required memory.
+
+        // VkMemoryAllocateInfo allocateInfoS = {};
+        // allocateInfoS.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        // allocateInfoS.allocationSize = memorySizeS; // specify required memory.
+
         VkMemoryAllocateInfo allocateInfo = {};
         allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
         allocateInfo.allocationSize = memorySize; // specify required memory.
-        /*
-        There are several types of memory that can be allocated, and we must choose a memory type that:
 
-        1) Satisfies the memory requirements(memoryRequirements.memoryTypeBits). 
-        2) Satifies our own usage requirements. We want to be able to read the buffer memory from the GPU to the CPU
-           with vkMapMemory, so we set VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT. 
-        Also, by setting VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, memory written by the device(GPU) will be easily 
-        visible to the host(CPU), without having to call any extra flushing commands. So mainly for convenience, we set
-        this flag.
-        */
+        // allocateInfomatA.memoryTypeIndex = findMemoryType(
+        //     memorySizematA, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+        // allocateInfomatB.memoryTypeIndex = findMemoryType(
+        //     memorySizematB, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+        // allocateInfomatC.memoryTypeIndex = findMemoryType(
+        //     memorySizematC, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+        // allocateInfoS.memoryTypeIndex = findMemoryType(
+        //     memorySizeS, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
         allocateInfo.memoryTypeIndex = findMemoryType(
             memorySize, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
-        VK_CHECK_RESULT(vkAllocateMemory(device, &allocateInfo, NULL, &bufferMemory)); // allocate memory on device.
+        // VK_CHECK_RESULT(vkAllocateMemory(device, &allocateInfomatA, NULL, &bufferMemorymatA)); // allocate memory on device.
+        // VK_CHECK_RESULT(vkAllocateMemory(device, &allocateInfomatB, NULL, &bufferMemorymatB));
+        // VK_CHECK_RESULT(vkAllocateMemory(device, &allocateInfomatC, NULL, &bufferMemorymatC));
+        // VK_CHECK_RESULT(vkAllocateMemory(device, &allocateInfoS, NULL, &bufferMemoryS));
+        VK_CHECK_RESULT(vkAllocateMemory(device, &allocateInfo, NULL, &bufferMemory));
+
+        float* oActMinMaxtmp;
+        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, sizeof(float)*2, 0, (void **) &oActMinMaxtmp));
         
-         // fill the buffers
-        float *matAtmp;
-        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, matrixASize, 0, (void **) &matAtmp));
-        
-        memcpy(matAtmp, matA, matrixASize);
+        oActMinMaxtmp[0] = outputActivationMin;
+        oActMinMaxtmp[1] = outputActivationMax;
 
         vkUnmapMemory(device, bufferMemory);
 
-        float *matBtmp;
-        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, matrixASize, matrixBSize, 0, (void **) &matBtmp));
+        float* iDatatmp;
+        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, sizeof(float)*2, inputSize, 0, (void **) &iDatatmp));
         
-        memcpy(matBtmp, matB, matrixBSize);
+        std::memcpy(iDatatmp, inputData, inputSize);
 
         vkUnmapMemory(device, bufferMemory);
 
-        int *matSizestmp;
-        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, matrixASize+matrixBSize+matrixCSize, matrixSizesSize, 0, (void **) &matSizestmp));
-
-        matSizestmp[0] = M;
-        matSizestmp[1] = K;
-        matSizestmp[2] = N;
+        float* fDatatmp;
+        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, inputSize+(sizeof(float)*2), filterSize, 0, (void **) &fDatatmp));
+        
+        std::memcpy(fDatatmp, filterData, filterSize);
 
         vkUnmapMemory(device, bufferMemory);
 
-        // Now associate that allocated memory with the buffer. With that, the buffer is backed by actual memory. 
+        float* bDatatmp;
+        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, inputSize+(sizeof(float)*2)+filterSize, biasSize, 0, (void **) &bDatatmp));
+        
+        std::memcpy(bDatatmp, biasData, biasSize);
+
+        vkUnmapMemory(device, bufferMemory);
+
+        int* stridepaddimstmp;
+        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, inputSize+(sizeof(float)*2)+filterSize+biasSize+outputSize, matrixSizesSize, 0, (void **) &stridepaddimstmp));
+        
+        stridepaddimstmp[0] = strideWidth;
+        stridepaddimstmp[1] = strideHeight;
+        stridepaddimstmp[2] = padWidth;
+        stridepaddimstmp[3] = padHeight;
+        stridepaddimstmp[36] = inputSize/sizeof(float);
+        stridepaddimstmp[37] = filterSize/sizeof(float);
+        stridepaddimstmp[38] = biasSize/sizeof(float);
+        for(int i = 0; i < 16; i++) {
+            stridepaddimstmp[i+4] = dimSizes[i];
+            stridepaddimstmp[i+20] = dimStrides[i];
+        }
+
+        vkUnmapMemory(device, bufferMemory);
+
         VK_CHECK_RESULT(vkBindBufferMemory(device, matrixA, bufferMemory, 0));
-        VK_CHECK_RESULT(vkBindBufferMemory(device, matrixB, bufferMemory, matrixASize));
-        VK_CHECK_RESULT(vkBindBufferMemory(device, matrixC, bufferMemory, matrixASize+matrixBSize));
+        // VK_CHECK_RESULT(vkBindBufferMemory(device, matrixB, bufferMemory, matrixASize));
         VK_CHECK_RESULT(vkBindBufferMemory(device, matrixSizes, bufferMemory, matrixASize+matrixBSize+matrixCSize));
+        // VK_CHECK_RESULT(vkBindBufferMemory(device, matrixC, bufferMemory, matrixASize+matrixBSize+matrixSizesSize));
     }
 
     void createDescriptorSetLayout() {
-        /*
-        Here we specify a descriptor set layout. This allows us to bind our descriptors to 
-        resources in the shader. 
-
-        */
-
-        /*
-        Here we specify a binding of type VK_DESCRIPTOR_TYPE_STORAGE_BUFFER to the binding point
-        0. This binds to 
-
-          layout(std140, binding = 0) buffer buf
-
-        in the compute shader.
-        */
         VkDescriptorSetLayoutBinding descriptorSetLayoutBindings[4];
 
         descriptorSetLayoutBindings[0] = {};
@@ -744,103 +715,88 @@ public:
         descriptorSetLayoutBindings[1].descriptorCount = 1;
         descriptorSetLayoutBindings[1].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
-        descriptorSetLayoutBindings[2] = {};
-        descriptorSetLayoutBindings[2].binding = 2; // binding = 2
-        descriptorSetLayoutBindings[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        descriptorSetLayoutBindings[2].descriptorCount = 1;
-        descriptorSetLayoutBindings[2].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+        // descriptorSetLayoutBindings[2] = {};
+        // descriptorSetLayoutBindings[2].binding = 2; // binding = 3
+        // descriptorSetLayoutBindings[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        // descriptorSetLayoutBindings[2].descriptorCount = 1;
+        // descriptorSetLayoutBindings[2].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
-        descriptorSetLayoutBindings[3] = {};
-        descriptorSetLayoutBindings[3].binding = 3; // binding = 3
-        descriptorSetLayoutBindings[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        descriptorSetLayoutBindings[3].descriptorCount = 1;
-        descriptorSetLayoutBindings[3].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+        // descriptorSetLayoutBindings[3] = {};
+        // descriptorSetLayoutBindings[3].binding = 3; // binding = 2
+        // descriptorSetLayoutBindings[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        // descriptorSetLayoutBindings[3].descriptorCount = 1;
+        // descriptorSetLayoutBindings[3].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
         VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {};
         descriptorSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        descriptorSetLayoutCreateInfo.bindingCount = 4; // only a single binding in this descriptor set layout. 
+        descriptorSetLayoutCreateInfo.bindingCount = 2; // only a single binding in this descriptor set layout. 
         descriptorSetLayoutCreateInfo.pBindings = descriptorSetLayoutBindings; 
 
-        // Create the descriptor set layout. 
         VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCreateInfo, NULL, &descriptorSetLayout));
     }
 
     void createDescriptorSet() {
-        /*
-        So we will allocate a descriptor set here.
-        But we need to first create a descriptor pool to do that. 
-        */
+        // VkDescriptorPoolSize descriptorPoolSizes[4];
 
-        /*
-        Our descriptor pool can only allocate a single storage buffer.
-        */
-        VkDescriptorPoolSize descriptorPoolSizes[4];
+        // descriptorPoolSizes[0] = {};
+        // descriptorPoolSizes[0].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        // descriptorPoolSizes[0].descriptorCount = 1;
 
-        descriptorPoolSizes[0] = {};
-        descriptorPoolSizes[0].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        descriptorPoolSizes[0].descriptorCount = 1;
+        // descriptorPoolSizes[1] = {};
+        // descriptorPoolSizes[1].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        // descriptorPoolSizes[1].descriptorCount = 1;
 
-        descriptorPoolSizes[1] = {};
-        descriptorPoolSizes[1].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        descriptorPoolSizes[1].descriptorCount = 1;
+        // descriptorPoolSizes[2] = {};
+        // descriptorPoolSizes[2].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        // descriptorPoolSizes[2].descriptorCount = 1;
 
-        descriptorPoolSizes[2] = {};
-        descriptorPoolSizes[2].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        descriptorPoolSizes[2].descriptorCount = 1;
+        // descriptorPoolSizes[3] = {};
+        // descriptorPoolSizes[3].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        // descriptorPoolSizes[3].descriptorCount = 1;
 
-        descriptorPoolSizes[3] = {};
-        descriptorPoolSizes[3].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        descriptorPoolSizes[3].descriptorCount = 1;
+        VkDescriptorPoolSize descriptorPoolSize;
 
+        descriptorPoolSize = {};
+        descriptorPoolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        descriptorPoolSize.descriptorCount = 2;
 
         VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {};
         descriptorPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         descriptorPoolCreateInfo.maxSets = 1; // we only need to allocate one descriptor set from the pool.
-        descriptorPoolCreateInfo.poolSizeCount = 4;
-        descriptorPoolCreateInfo.pPoolSizes = descriptorPoolSizes;
+        descriptorPoolCreateInfo.poolSizeCount = 1;
+        descriptorPoolCreateInfo.pPoolSizes = &descriptorPoolSize;
 
-        // create descriptor pool.
         VK_CHECK_RESULT(vkCreateDescriptorPool(device, &descriptorPoolCreateInfo, NULL, &descriptorPool));
 
-        /*
-        With the pool allocated, we can now allocate the descriptor set. 
-        */
         VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = {};
         descriptorSetAllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO; 
         descriptorSetAllocateInfo.descriptorPool = descriptorPool; // pool to allocate from.
         descriptorSetAllocateInfo.descriptorSetCount = 1; // allocate a single descriptor set.
         descriptorSetAllocateInfo.pSetLayouts = &descriptorSetLayout;
 
-        // allocate descriptor set.
         VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocateInfo, &descriptorSet));
 
-        /*
-        Next, we need to connect our actual storage buffer with the descrptor. 
-        We use vkUpdateDescriptorSets() to update the descriptor set.
-        */
-
-        // Specify the buffer to bind to the descriptor.
         VkDescriptorBufferInfo descriptorBufferInfoMatA = {};
         descriptorBufferInfoMatA.buffer = matrixA;
         descriptorBufferInfoMatA.offset = 0;
-        descriptorBufferInfoMatA.range = matrixASize;
+        descriptorBufferInfoMatA.range = VK_WHOLE_SIZE;
 
-        VkDescriptorBufferInfo descriptorBufferInfoMatB = {};
-        descriptorBufferInfoMatB.buffer = matrixB;
-        descriptorBufferInfoMatB.offset = 0;
-        descriptorBufferInfoMatB.range = matrixBSize;
-
-        VkDescriptorBufferInfo descriptorBufferInfoMatC = {};
-        descriptorBufferInfoMatC.buffer = matrixC;
-        descriptorBufferInfoMatC.offset = 0;
-        descriptorBufferInfoMatC.range = matrixCSize;
+        // VkDescriptorBufferInfo descriptorBufferInfoMatB = {};
+        // descriptorBufferInfoMatB.buffer = matrixB;
+        // descriptorBufferInfoMatB.offset = 0;
+        // descriptorBufferInfoMatB.range = VK_WHOLE_SIZE;
 
         VkDescriptorBufferInfo descriptorBufferInfoMatSizes = {};
         descriptorBufferInfoMatSizes.buffer = matrixSizes;
         descriptorBufferInfoMatSizes.offset = 0;
-        descriptorBufferInfoMatSizes.range = matrixSizesSize;
+        descriptorBufferInfoMatSizes.range = VK_WHOLE_SIZE;
 
-        VkWriteDescriptorSet writeDescriptorSets[4];
+        // VkDescriptorBufferInfo descriptorBufferInfoMatC = {};
+        // descriptorBufferInfoMatC.buffer = matrixC;
+        // descriptorBufferInfoMatC.offset = 0;
+        // descriptorBufferInfoMatC.range = VK_WHOLE_SIZE;
+
+        VkWriteDescriptorSet writeDescriptorSets[2];
 
         writeDescriptorSets[0] = {};
         writeDescriptorSets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -856,70 +812,200 @@ public:
         writeDescriptorSets[1].dstBinding = 1; // write to the first, and only binding.
         writeDescriptorSets[1].descriptorCount = 1; // update a single descriptor.
         writeDescriptorSets[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; // storage buffer.
-        writeDescriptorSets[1].pBufferInfo = &descriptorBufferInfoMatB;
+        writeDescriptorSets[1].pBufferInfo = &descriptorBufferInfoMatSizes;
 
-        writeDescriptorSets[2] = {};
-        writeDescriptorSets[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writeDescriptorSets[2].dstSet = descriptorSet; // write to this descriptor set.
-        writeDescriptorSets[2].dstBinding = 2; // write to the first, and only binding.
-        writeDescriptorSets[2].descriptorCount = 1; // update a single descriptor.
-        writeDescriptorSets[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; // storage buffer.
-        writeDescriptorSets[2].pBufferInfo = &descriptorBufferInfoMatC;
+        // writeDescriptorSets[2] = {};
+        // writeDescriptorSets[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        // writeDescriptorSets[2].dstSet = descriptorSet; // write to this descriptor set.
+        // writeDescriptorSets[2].dstBinding = 2; // write to the first, and only binding.
+        // writeDescriptorSets[2].descriptorCount = 1; // update a single descriptor.
+        // writeDescriptorSets[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; // storage buffer.
+        // writeDescriptorSets[2].pBufferInfo = &descriptorBufferInfoMatSizes;
 
-        writeDescriptorSets[3] = {};
-        writeDescriptorSets[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writeDescriptorSets[3].dstSet = descriptorSet; // write to this descriptor set.
-        writeDescriptorSets[3].dstBinding = 3; // write to the first, and only binding.
-        writeDescriptorSets[3].descriptorCount = 1; // update a single descriptor.
-        writeDescriptorSets[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; // storage buffer.
-        writeDescriptorSets[3].pBufferInfo = &descriptorBufferInfoMatSizes;
+        // writeDescriptorSets[3] = {};
+        // writeDescriptorSets[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        // writeDescriptorSets[3].dstSet = descriptorSet; // write to this descriptor set.
+        // writeDescriptorSets[3].dstBinding = 3; // write to the first, and only binding.
+        // writeDescriptorSets[3].descriptorCount = 1; // update a single descriptor.
+        // writeDescriptorSets[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; // storage buffer.
+        // writeDescriptorSets[3].pBufferInfo = &descriptorBufferInfoMatC;
 
-        // perform the update of the descriptor set.
-        vkUpdateDescriptorSets(device, 4, writeDescriptorSets, 0, NULL);
+        vkUpdateDescriptorSets(device, 2, writeDescriptorSets, 0, NULL);
     }
 
     void createComputePipeline() {
-        /*
-        We create a compute pipeline here. 
-        */
+        VkPhysicalDeviceProperties devprops;
+        vkGetPhysicalDeviceProperties(physicalDevice, &devprops);
+        __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxComputeSharedMemorySize: %d", devprops.limits.maxComputeSharedMemorySize);
+        __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxComputeWorkGroupCount[3]: %d %d %d", devprops.limits.maxComputeWorkGroupCount[0], devprops.limits.maxComputeWorkGroupCount[1], devprops.limits.maxComputeWorkGroupCount[2]);
+        __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxComputeWorkGroupInvocations: %d", devprops.limits.maxComputeWorkGroupInvocations);
+        __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxComputeWorkGroupSize[3]: %d %d %d", devprops.limits.maxComputeWorkGroupSize[0], devprops.limits.maxComputeWorkGroupSize[1], devprops.limits.maxComputeWorkGroupSize[2]);
+        __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxDescriptorSetStorageBuffers: %d", devprops.limits.maxDescriptorSetStorageBuffers);
+        __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxPerStageDescriptorStorageBuffers: %d", devprops.limits.maxPerStageDescriptorStorageBuffers);
+        __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxPerStageResources: %d", devprops.limits.maxPerStageResources);
+        __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxStorageBufferRange: %d", devprops.limits.maxStorageBufferRange);
 
-        /*
-        Create a shader module. A shader module basically just encapsulates some shader code.
-        */
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "Before Readfile");
-        
+        // std::string source =
+            // "#version 450 \n" \
+            // "#extension GL_ARB_separate_shader_objects : enable \n" \
+            // "layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in; \n" \
+            // "layout(binding = 0) buffer floatBuffer { \n" \
+            // "    float convFloatB[]; \n" \
+            // "}; \n" \
+            // "layout(binding = 1) readonly buffer intBuffer { \n" \
+            // "    int convIntB[]; \n" \
+            // "}; \n" \
+            // "void main() { \n" \
+            // "  int gid0 = int(gl_GlobalInvocationID.x); \n" \
+            // "  int gid1 = int(gl_GlobalInvocationID.y); \n" \
+            // "  int output_depth = convIntB[11]; \n" \
+            // "  int output_width = convIntB[17]; \n" \
+            // "  if((gid0*24+gid1) < 144) { \n" \
+            // "        convFloatB[2 + convIntB[36] + convIntB[37] + convIntB[38] + (gid0*24+gid1)] = 20.0; \n" \
+            // "  } \n" \
+            // "}";
         std::string source =
-          "#version 450 \n" \
-          "#extension GL_ARB_separate_shader_objects : enable \n" \
-          "layout(local_size_x = 32, local_size_y = 8) in; \n" \
-          "layout(binding = 0) buffer matrixA { \n" \
-          "    float A[]; \n" \
-          "}; \n" \
-          "layout(binding = 1) buffer matrixB { \n" \
-          "    float B[]; \n" \
-          "}; \n" \
-          "layout(binding = 2) buffer matrixC { \n" \
-          "    float C[]; \n" \
-          "}; \n" \
-          "layout (binding = 3) buffer matrixSizes { \n" \
-          "    int S[]; \n" \
-          "}; \n" \
-          "void main() { \n" \
-          "    uint row = gl_GlobalInvocationID.x; \n" \
-          "    uint column = gl_GlobalInvocationID.y;  \n" \
-          "    int M = S[0];  \n" \
-          "    int K = S[1];  \n" \
-          "    int N = S[2];  \n" \
-          "    if ((row < M) && (column < N)) { \n" \
-          "        float sum = 0.0; \n" \
-          "        uint a_row_start_index = K * row; \n" \
-          "        uint b_column_start_index = K * column; \n" \
-          "        for(int i = 0; i < K; i++){ \n" \
-          "            sum += A[a_row_start_index + i]*B[b_column_start_index + i]; \n" \
-          "        } \n" \
-          "        C[M * column + row] = sum; \n" \
-          "    } \n" \
-          "}";
+        "#version 450 \n" \
+        "#extension GL_ARB_separate_shader_objects : enable \n" \
+        "layout(local_size_x = 8, local_size_y = 32, local_size_z = 1) in; \n" \
+        "layout(binding = 0) buffer floatBuffer { \n" \
+        "    float convFloatB[]; \n" \
+        "}; \n" \
+        "layout(binding = 1) readonly buffer intBuffer { \n" \
+        "    int convIntB[]; \n" \
+        "}; \n" \
+        "void main() { \n" \
+        "  int gid0 = int(gl_GlobalInvocationID.x); \n" \
+        "  int gid1 = int(gl_GlobalInvocationID.y); \n" \
+        "  int output_depth = convIntB[11]; \n" \
+        "  int output_width = convIntB[17]; \n" \
+        "  if((gid0 < convIntB[7]*output_depth) && (gid1 < convIntB[18]*output_width)) { \n" \
+        "        int var1 = gid0/output_depth; \n" \
+        "        int var2 = int(mod(gid1,output_width)); \n" \
+        "        int var3 = int(mod(gid0,output_depth)); \n" \
+        "        int var4 = gid1/output_width; \n" \
+        "        float total = 0.0; \n" \
+        "        for (int filter_y = 0; filter_y < convIntB[10]; ++filter_y) { \n" \
+        "          for (int filter_x = 0; filter_x < convIntB[9]; ++filter_x) { \n" \
+        "            for (int in_channel = 0; in_channel < convIntB[4]; ++in_channel) { \n" \
+        "              int in_x = (var2 * convIntB[0] - convIntB[2]) + filter_x; \n" \
+        "              int in_y = (var4 * convIntB[1] - convIntB[3]) + filter_y; \n" \
+        "              if ((in_x >= 0) && (in_x < convIntB[5]) && (in_y >= 0) && \n" \
+        "                  (in_y < convIntB[6])) { \n" \
+        "                total += (convFloatB[2 + in_channel*convIntB[20] + in_x*convIntB[21] +in_y*convIntB[22] + var1*convIntB[23]] *  \n" \
+        "                        convFloatB[convIntB[36] + 2 + in_channel*convIntB[24] + filter_x*convIntB[25] + filter_y*convIntB[26] + var3*convIntB[27]]); \n" \
+        "              } \n" \
+        "            } \n" \
+        "          } \n" \
+        "        } \n" \
+        "        float bias_value = 0.0; \n" \
+        "        if (convIntB[38] > 0) { \n" \
+        "          bias_value = convFloatB[convIntB[36] + 2 + convIntB[37]+(var3*convIntB[28])]; \n" \
+        "        } \n" \
+        "        float max = total+bias_value; \n" \
+        "        if(max < convFloatB[0]) max = convFloatB[0]; \n" \
+        "        float min = max; \n" \
+        "        if(min > convFloatB[1]) min = convFloatB[1]; \n" \
+        "        convFloatB[2 + convIntB[36] + convIntB[37] + convIntB[38] + var3*convIntB[32] + var2*convIntB[33] + var4*convIntB[34] + var1*convIntB[35]] = min; \n" \
+        "  } \n" \
+        "}";
+        // std::string source =
+        //     "#version 450 \n" \
+        //     "#extension GL_ARB_separate_shader_objects : enable \n" \
+        //     "layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in; \n" \
+        //     "layout(binding = 0) buffer floatBuffer { \n" \
+        //     "    float convFloatB[]; \n" \
+        //     "}; \n" \
+        //     "layout(binding = 1) readonly buffer intBuffer { \n" \
+        //     "    int convIntB[]; \n" \
+        //     "}; \n" \
+        //     "void main() { \n" \
+        //     "  int gid0 = int(gl_GlobalInvocationID.x); \n" \
+        //     "  int gid1 = int(gl_GlobalInvocationID.y); \n" \
+        //     "  if((gid0 < convIntB[7]*"+to_string(dimSizes[7])+") && (gid1 < convIntB[18]*"+to_string(dimSizes[13])+")) { \n" \
+        //     "        float total = 0.0; \n" \
+        //     "        for (int filter_y = 0; filter_y < convIntB[10]; filter_y++) { \n" \
+        //     "          for (int filter_x = 0; filter_x < convIntB[9]; filter_x++) { \n" \
+        //     "            for (int in_channel = 0; in_channel < convIntB[4]; in_channel++) { \n" \
+        //     "              int in_x = ((int(mod(gid1,"+to_string(dimSizes[13])+"))) * convIntB[0] - convIntB[2]) + filter_x; \n" \
+        //     "              int in_y = ((gid1/"+to_string(dimSizes[13])+") * convIntB[1] - convIntB[3]) + filter_y; \n" \
+        //     "              if ((in_x >= 0) && (in_x < convIntB[5]) && (in_y >= 0) && \n" \
+        //     "                  (in_y < convIntB[6])) { \n" \
+        //     "                total += (convFloatB[2 + in_channel*convIntB[20] + in_x*convIntB[21] +in_y*convIntB[22] + (gid0/"+to_string(dimSizes[7])+")*convIntB[23]] *  \n" \
+        //     "                        convFloatB[convIntB[36] + 2 + in_channel*convIntB[24] + filter_x*convIntB[25] + filter_y*convIntB[26] + (int(mod(gid0,"+to_string(dimSizes[7])+")))*convIntB[27]]); \n" \
+        //     "              } \n" \
+        //     "            } \n" \
+        //     "          } \n" \
+        //     "        } \n" \
+        //     "        float bias_value = 0.0; \n" \
+        //     "        if (convIntB[38] > 0) { \n" \
+        //     "          bias_value = convFloatB[convIntB[36] + 2 + convIntB[37])+((int(mod(gid0,"+to_string(dimSizes[7])+")))*convIntB[28])]; \n" \
+        //     "        } \n" \
+        //     "        float max = total+bias_value; \n" \
+        //     "        if(max < convFloatB[0]) max = convFloatB[0]; \n" \
+        //     "        float min = max; \n" \
+        //     "        if(min > convFloatB[1]) min = convFloatB[1]; \n" \
+        //     "        convFloatB[2 + convIntB[36] + convIntB[37] + convIntB[38] + (int(mod(gid0,"+to_string(dimSizes[7])+")))*convIntB[32] + (int(mod(gid1,"+to_string(dimSizes[13])+")))*convIntB[33] + (gid1/"+to_string(dimSizes[17])+")*convIntB[34] + (gid0/"+to_string(dimSizes[13])+")*convIntB[35]] = min; \n" \
+        //     "  } \n" \
+        //     "}";
+
+            __android_log_print(ANDROID_LOG_INFO, "VulkanCode", "codeStr : %s", source.c_str());
+
+            // "#version 450 \n" \
+            // "#extension GL_ARB_separate_shader_objects : enable \n" \
+            // "layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in; \n" \
+            // "layout(binding = 0) readonly buffer inputData { \n" \
+            // "    float iData[]; \n" \
+            // "}; \n" \
+            // "layout(binding = 1) readonly buffer filterBiasActivationMinMax { \n" \
+            // "    float oActMin; \n" \
+            // "    float oActMax; \n" \
+            // "    float fData[]; \n" \
+            // "}; \n" \
+            // "layout(binding = 2) readonly buffer dimSizeStrideStridePad { \n" \
+            // "    int strideWidth; \n" \
+            // "    int strideHeight; \n" \
+            // "    int padWidth; \n" \
+            // "    int padHeight; \n" \
+            // "    int dimSizes[16]; \n" \
+            // "    int dimStrides[16]; \n" \
+            // "}; \n" \
+            // "layout(binding = 3) buffer outputData { \n" \
+            // "    float oData[]; \n" \
+            // "}; \n" \
+            // "void main() { \n" \
+            // "  int gid0 = int(gl_GlobalInvocationID.x); \n" \
+            // "  int gid1 = int(gl_GlobalInvocationID.y); \n" \
+            // "  int output_depth = dimSizes[7]; \n" \
+            // "  int output_width = dimSizes[13]; \n" \
+            // "  if((gid0 < dimSizes[3]*output_depth) && (gid1 < dimSizes[14]*output_width)) { \n" \
+            // "        float total = 0.0; \n" \
+            // "        for (int filter_y = 0; filter_y < dimSizes[6]; ++filter_y) { \n" \
+            // "          for (int filter_x = 0; filter_x < dimSizes[5]; ++filter_x) { \n" \
+            // "            for (int in_channel = 0; in_channel < dimSizes[0]; ++in_channel) { \n" \
+            // "              int in_x = ((int(mod(gid1,output_width)) * strideWidth) - padWidth) + filter_x; \n" \
+            // "              int in_y = (((gid1/output_width) * strideHeight) - padHeight) + filter_y; \n" \
+            // "              if ((in_x >= 0) && (in_x < dimSizes[1]) && (in_y >= 0) && \n" \
+            // "                  (in_y < dimSizes[2])) { \n" \
+            // "                total += (iData[in_channel*dimStrides[0] + in_x*dimStrides[1] +in_y*dimStrides[2] + (gid0/output_depth)*dimStrides[3]] *  \n" \
+            // "                        fData[in_channel*dimStrides[4] + filter_x*dimStrides[5] + filter_y*dimStrides[6] + int(mod(gid0,output_depth))*dimStrides[7]]); \n" \
+            // "              } \n" \
+            // "            } \n" \
+            // "          } \n" \
+            // "        } \n" \
+            // "        float bias_value = 0.0; \n" \
+            // "        if (dimSizes[8]*dimSizes[9]*dimSizes[10]*dimSizes[11] > 0) { \n" \
+            // "          bias_value = fData[(dimSizes[4]*dimSizes[5]*dimSizes[6]*dimSizes[7])+(int(mod(gid0,output_depth))*dimStrides[8])]; \n" \
+            // "        } \n" \
+            // "        float max = total+bias_value; \n" \
+            // "        if(max < oActMin) max = oActMin; \n" \
+            // "        float min = max; \n" \
+            // "        if(min > oActMax) min = oActMax; \n" \
+            // "        oData[int(mod(gid0,output_depth))*dimStrides[12] + int(mod(gid1,output_width))*dimStrides[13] + \n" \
+            // "                     (gid1/output_width)*dimStrides[14] + (gid0/output_depth)*dimStrides[15]] = min; \n" \
+            // "  } \n" \
+            // "}";
+
 
         shaderc::Compiler compiler;
         shaderc::CompileOptions options;
@@ -927,63 +1013,41 @@ public:
         // // options.AddMacroDefinition("MY_DEFINE", "1");
 
         shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(
-          source.c_str(), source.size(), shaderc_glsl_compute_shader, "matmul.glsl", options);
+          source.c_str(), source.size(), shaderc_glsl_compute_shader, "conv.glsl", options);
 
         if (module.GetCompilationStatus() !=
             shaderc_compilation_status_success) {
-          // __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "Compile Shader Error"); 
         }
 
         std::vector<uint32_t> code(module.cbegin(), module.cend());
-        
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "After Readfile");  
 
         VkShaderModuleCreateInfo createInfo = {};
         createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
         createInfo.pCode = code.data();
         createInfo.codeSize = sizeof(uint32_t)*code.size();
         
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "Before CreateShader");
+        __android_log_print(ANDROID_LOG_INFO, "VulkanConv", "codeSize : %d", createInfo.codeSize);
+
         VK_CHECK_RESULT(vkCreateShaderModule(device, &createInfo, NULL, &computeShaderModule));
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "After CreateShader");
 
-        /*
-        Now let us actually create the compute pipeline.
-        A compute pipeline is very simple compared to a graphics pipeline.
-        It only consists of a single stage with a compute shader. 
-
-        So first we specify the compute shader stage, and it's entry point(main).
-        */
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "1");
         VkPipelineShaderStageCreateInfo shaderStageCreateInfo = {};
         shaderStageCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         shaderStageCreateInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
         shaderStageCreateInfo.module = computeShaderModule;
         shaderStageCreateInfo.pName = "main";
 
-        /*
-        The pipeline layout allows the pipeline to access descriptor sets. 
-        So we just specify the descriptor set layout we created earlier.
-        */
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "2");
         VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {};
         pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         pipelineLayoutCreateInfo.setLayoutCount = 1;
         pipelineLayoutCreateInfo.pSetLayouts = &descriptorSetLayout; 
         
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "3");
         VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, NULL, &pipelineLayout));
 
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "4");
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
         pipelineCreateInfo.stage = shaderStageCreateInfo;
         pipelineCreateInfo.layout = pipelineLayout;
 
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "5");
-        /*
-        Now, we finally create the compute pipeline. 
-        */
         VK_CHECK_RESULT(vkCreateComputePipelines(
             device, VK_NULL_HANDLE,
             1, &pipelineCreateInfo,
@@ -991,105 +1055,48 @@ public:
     }
 
     void createCommandBuffer() {
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "6");
-        /*
-        We are getting closer to the end. In order to send commands to the device(GPU),
-        we must first record commands into a command buffer.
-        To allocate a command buffer, we must first create a command pool. So let us do that.
-        */
         VkCommandPoolCreateInfo commandPoolCreateInfo = {};
         commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
         commandPoolCreateInfo.flags = 0;
-        // the queue family of this command pool. All command buffers allocated from this command pool,
-        // must be submitted to queues of this family ONLY. 
         commandPoolCreateInfo.queueFamilyIndex = queueFamilyIndex;
         VK_CHECK_RESULT(vkCreateCommandPool(device, &commandPoolCreateInfo, NULL, &commandPool));
 
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "7");
-
-        /*
-        Now allocate a command buffer from the command pool. 
-        */
         VkCommandBufferAllocateInfo commandBufferAllocateInfo = {};
         commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        commandBufferAllocateInfo.commandPool = commandPool; // specify the command pool to allocate from. 
-        // if the command buffer is primary, it can be directly submitted to queues. 
-        // A secondary buffer has to be called from some primary command buffer, and cannot be directly 
-        // submitted to a queue. To keep things simple, we use a primary command buffer. 
+        commandBufferAllocateInfo.commandPool = commandPool;
+
         commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
         commandBufferAllocateInfo.commandBufferCount = 1; // allocate a single command buffer. 
         VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, &commandBuffer)); // allocate command buffer.
 
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "8");
-
-        /*
-        Now we shall start recording commands into the newly allocated command buffer. 
-        */
         VkCommandBufferBeginInfo beginInfo = {};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT; // the buffer is only submitted and used once in this application.
         VK_CHECK_RESULT(vkBeginCommandBuffer(commandBuffer, &beginInfo)); // start recording commands.
 
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "9");
-
-        /*
-        We need to bind a pipeline, AND a descriptor set before we dispatch.
-
-        The validation layer will NOT give warnings if you forget these, so be very careful not to forget them.
-        */
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, &descriptorSet, 0, NULL);
 
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "10");
-
-        /*
-        Calling vkCmdDispatch basically starts the compute pipeline, and executes the compute shader.
-        The number of workgroups is specified in the arguments.
-        If you are already familiar with compute shaders from OpenGL, this should be nothing new to you.
-        */
-        vkCmdDispatch(commandBuffer, (M-1)/32+1, (N-1)/8+1, 1);
-
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "11");
+        int batches = dimSizes[3];
+        int output_depth = dimSizes[7];
+        int output_height = dimSizes[14];  
+        int output_width = dimSizes[13];
+        vkCmdDispatch(commandBuffer, (batches*output_depth-1)/8+1, (output_height*output_width-1)/32+1, 1);
 
         VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffer)); // end recording commands.
     }
 
     void runCommandBuffer() {
-        /*
-        Now we shall finally submit the recorded command buffer to a queue.
-        */
-
         VkSubmitInfo submitInfo = {};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         submitInfo.commandBufferCount = 1; // submit a single command buffer
         submitInfo.pCommandBuffers = &commandBuffer; // the command buffer to submit.
 
-        /*
-          We create a fence.
-        */
-        // VkFence fence;
-        // VkFenceCreateInfo fenceCreateInfo = {};
-        // fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-        // fenceCreateInfo.flags = 0;
-        // VK_CHECK_RESULT(vkCreateFence(device, &fenceCreateInfo, NULL, &fence));
-
         // Start Timers
         double wall0 = get_wall_time();
         double cpu0  = get_cpu_time();
 
-        /*
-        We submit the command buffer on the queue, at the same time giving a fence.
-        */
         VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, 0));
-        /*
-        The command will not have finished executing until the fence is signalled.
-        So we wait here.
-        We will directly after this read our buffer from the GPU,
-        and we will not be sure that the command has finished executing unless we wait for the fence.
-        Hence, we use a fence here.
-        */
-        // VK_CHECK_RESULT(vkWaitForFences(device, 1, &fence, VK_TRUE, 100000000000));
-
         VK_CHECK_RESULT(vkQueueWaitIdle(queue));
 
         // Stop timers
@@ -1099,71 +1106,47 @@ public:
         double wall = wall1 - wall0;
         double cpu = cpu1 - cpu0;
 
-        __android_log_print(ANDROID_LOG_INFO, "Vulkantest", "runkernel: %lf", wall);
-
-        // vkDestroyFence(device, fence, NULL);
+        __android_log_print(ANDROID_LOG_INFO, "VulkanConv", "runkernel: %lf", wall);
     }
 
     void getresult() {
         float *matCtmp;
-        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, matrixASize+matrixBSize, matrixCSize, 0, (void **)&matCtmp));
-        
-        memcpy(matC, matCtmp, matrixCSize);
-
-        // float sum = 0.0;
-        // for (int k = 0; k < matrixCSize / sizeof(float); k++) {
-        //   sum += matCtmp[k];
-          // __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "Matmul %d: %lf", k, matCtmp[k]);
+        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 
+            inputSize+(sizeof(float)*2)+filterSize+biasSize, outputSize, 0, (void **)&matCtmp));
+      
+        // double sumC = 0.0;
+        // for (int k = 0; k < outputSize/sizeof(float); k++) {
+        //   sumC += matCtmp[k];
+        //   if(k < 100) {
+        //       __android_log_print(ANDROID_LOG_INFO, "VulkanConv", "Conv %d: %lf", k, matCtmp[k]);
+        //   }
         // }
 
-        // // __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "Matmul sum: %lf", sum);
+        std::memcpy(outputData, matCtmp, outputSize);
 
-        // vkUnmapMemory(device, bufferMemory);
+        // __android_log_print(ANDROID_LOG_INFO, "VulkanConv", "Conv sumC: %lf", sumC);
 
-
-        // //////////////////////////////
-        float *matAtmp;
-        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, matrixASize, 0, (void **) &matAtmp));
-        
-        float sumA = 0.0;
-        for (int k = 0; k < matrixASize / sizeof(float); k++) {
-          sumA += matAtmp[k];
-        }
-
-        vkUnmapMemory(device, bufferMemory);
-
-        __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "Matmul sumA: %lf", sumA);
-
-        float *matBtmp;
-        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, matrixASize, matrixBSize, 0, (void **) &matBtmp));
-        
-        float sumB = 0.0;
-        for (int k = 0; k < matrixBSize / sizeof(float); k++) {
-          sumB += matBtmp[k];
-        }
-
-        vkUnmapMemory(device, bufferMemory);
-
-        __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "Matmul sumB: %lf", sumB);
-
-        int *matSizestmp;
-        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, matrixASize+matrixBSize+matrixCSize, matrixSizesSize, 0, (void **) &matSizestmp));
-
-        __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "Matmul matsizeM: %d %d %d", matSizestmp[0], matSizestmp[1], matSizestmp[2]);
-
-        vkUnmapMemory(device, bufferMemory);
-
-        
+        vkUnmapMemory(device, bufferMemory);  
     }
 
     void cleanup() {
-        /*
-        Clean up all Vulkan Resources. 
-        */
+        // if (enableValidationLayers) {
+        //     // destroy callback.
+        //     auto func = (PFN_vkDestroyDebugReportCallbackEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugReportCallbackEXT");
+        //     if (func == nullptr) {
+        //         throw std::runtime_error("Could not load vkDestroyDebugReportCallbackEXT");
+        //     }
+        //     func(instance, debugReportCallback, NULL);
+        // }
+
+        // vkFreeMemory(device, bufferMemorymatA, NULL);
+        // vkFreeMemory(device, bufferMemorymatB, NULL);
+        // vkFreeMemory(device, bufferMemorymatC, NULL);
+        // vkFreeMemory(device, bufferMemoryS, NULL);
         vkFreeMemory(device, bufferMemory, NULL);
         vkDestroyBuffer(device, matrixA, NULL);
-        vkDestroyBuffer(device, matrixB, NULL);
-        vkDestroyBuffer(device, matrixC, NULL);
+        // vkDestroyBuffer(device, matrixB, NULL);
+        // vkDestroyBuffer(device, matrixC, NULL);
         vkDestroyBuffer(device, matrixSizes, NULL);
         vkDestroyShaderModule(device, computeShaderModule, NULL);
         vkDestroyDescriptorPool(device, descriptorPool, NULL);
@@ -1175,6 +1158,25 @@ public:
         vkDestroyInstance(instance, NULL);    
     }
 };
+
+void vulkanTestConv(const float* input_data, const int input_size,
+          const float* filter_data, const int filter_size,
+          const float* bias_data, const int bias_size,
+          float* output_data, const int output_size,
+          int stride_width, int stride_height, 
+          int pad_width, int pad_height, 
+          const int* dim_sizes, const int* dim_strides,
+          float output_activation_min, float output_activation_max) {
+    VulkanConvolution app;
+    app.run(input_data,input_size,
+          filter_data,filter_size,
+          bias_data,bias_size,
+          output_data,output_size,
+          stride_width, stride_height, 
+          pad_width, pad_height, 
+          dim_sizes, dim_strides,
+          output_activation_min, output_activation_max);
+}
 
 inline void OpenCLConv(const float* input_data, const int input_size,
           const float* filter_data, const int filter_size,
@@ -1505,19 +1507,19 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
   int strides2 = input_dims.strides[2];
   int strides3 = input_dims.strides[3];
 
-  __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Input height: %d", inheightsize);
-  __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Input width: %d", inwidthsize);
-  __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Input depth: %d", indepthsize);
-  __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Input batch: %d", inbatchsize);
+  // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Input height: %d", inheightsize);
+  // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Input width: %d", inwidthsize);
+  // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Input depth: %d", indepthsize);
+  // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Input batch: %d", inbatchsize);
 
-  __android_log_print(ANDROID_LOG_INFO, "Convruntime", "strides0: %d", strides0);
-  __android_log_print(ANDROID_LOG_INFO, "Convruntime", "strides1: %d", strides1);
-  __android_log_print(ANDROID_LOG_INFO, "Convruntime", "strides2: %d", strides2);
-  __android_log_print(ANDROID_LOG_INFO, "Convruntime", "strides3: %d", strides3);
+  // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "strides0: %d", strides0);
+  // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "strides1: %d", strides1);
+  // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "strides2: %d", strides2);
+  // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "strides3: %d", strides3);
 
-  // Start Timers
-  double wall0 = get_wall_time();
-  double cpu0  = get_cpu_time();
+  // // Start Timers
+  // double wall0 = get_wall_time();
+  // double cpu0  = get_cpu_time();
 
   const int batches = MatchingArraySize(input_dims, 3, output_dims, 3);
   const int input_depth = MatchingArraySize(input_dims, 0, filter_dims, 0);
@@ -1582,15 +1584,24 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
 
   // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Walltime: %lf", wall);
 
-  OpenCLConv(input_data, input_size,
+  // OpenCLConv(input_data, input_size,
+  //         filter_data, filter_size,
+  //         bias_data, bias_size,
+  //         output_data, output_size,
+  //         stride_width, stride_height, 
+  //         pad_width, pad_height, 
+  //         sizes, strides,
+  //         output_activation_min, output_activation_max,
+  //         context_cl, queue, program);
+
+  vulkanTestConv(input_data, input_size,
           filter_data, filter_size,
           bias_data, bias_size,
           output_data, output_size,
           stride_width, stride_height, 
           pad_width, pad_height, 
           sizes, strides,
-          output_activation_min, output_activation_max,
-          context_cl, queue, program);
+          output_activation_min, output_activation_max);
 
   // Conv2(input_data, input_dims,
   //                filter_data, filter_dims,
@@ -1601,15 +1612,15 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
   //                output_dims, im2col_data,
   //                im2col_dims);
 
-  // Stop timers
-  double wall1 = get_wall_time();
-  double cpu1  = get_cpu_time();
+  // // Stop timers
+  // double wall1 = get_wall_time();
+  // double cpu1  = get_cpu_time();
 
-  double wall = wall1 - wall0;
-  double cpu = cpu1 - cpu0;
+  // double wall = wall1 - wall0;
+  // double cpu = cpu1 - cpu0;
 
-  // note: andoird log
-  __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Walltime: %lf", wall);
+  // // note: andoird log
+  // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Walltime: %lf", wall);
 }
 
 }  // namespace multithreaded_ops
