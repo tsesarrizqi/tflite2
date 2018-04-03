@@ -56,7 +56,7 @@ limitations under the License.
 #include <vector>
 
 //note: shaderc
-#include <shaderc/shaderc.hpp>
+#include "shaderc/shaderc.hpp"
 
 // note: timer
 #include <time.h>
@@ -81,65 +81,65 @@ limitations under the License.
 namespace tflite {
 namespace multithreaded_ops {
 
-const char *kernelSource =           "\n" \
-"__kernel void conv(__global float* input_data,   \n" \
-"          __global float* filter_data,   \n" \
-"          __global float* bias_data,   \n" \
-"          __global float* output_data,  \n" \
-"          int stride_width, int stride_height,   \n" \
-"          int pad_width, int pad_height,   \n" \
-"          __global int* dim_sizes, __global int* dim_strides,  \n" \
-"          float output_activation_min, float output_activation_max) {  \n" \
-"  int gid = get_global_id(0);  \n" \
-"  const int batches = dim_sizes[3];  \n" \
-"  const int input_depth = dim_sizes[0];  \n" \
-"  const int output_depth = dim_sizes[7];  \n" \
-"  int batch = gid/output_depth;  \n" \
-"  int out_channel = gid%output_depth;  \n" \
-"  if(gid < batches*output_depth) {  \n" \
-"    const int input_height = dim_sizes[2];  \n" \
-"    const int input_width = dim_sizes[1];  \n" \
-"    const int filter_height = dim_sizes[6];  \n" \
-"    const int filter_width = dim_sizes[5];  \n" \
-"    const int output_height = dim_sizes[14];  \n" \
-"    const int output_width = dim_sizes[13];  \n" \
-"    for (int out_y = 0; out_y < output_height; ++out_y) {  \n" \
-"      for (int out_x = 0; out_x < output_width; ++out_x) {  \n" \
-"        const int in_x_origin = (out_x * stride_width) - pad_width;  \n" \
-"        const int in_y_origin = (out_y * stride_height) - pad_height;  \n" \
-"        float total = 0.f;  \n" \
-"        for (int filter_y = 0; filter_y < filter_height; ++filter_y) {  \n" \
-"          for (int filter_x = 0; filter_x < filter_width; ++filter_x) {  \n" \
-"            for (int in_channel = 0; in_channel < input_depth; ++in_channel) {  \n" \
-"              const int in_x = in_x_origin + filter_x;  \n" \
-"              const int in_y = in_y_origin + filter_y;  \n" \
-"              if ((in_x >= 0) && (in_x < input_width) && (in_y >= 0) &&  \n" \
-"                  (in_y < input_height)) {  \n" \
-"                float input_value = input_data[in_channel*dim_strides[0] + in_x*dim_strides[1] +   \n" \
-"                                                in_y*dim_strides[2] + batch*dim_strides[3]];  \n" \
-"                float filter_value =  \n" \
-"                    filter_data[in_channel*dim_strides[4] + filter_x*dim_strides[5] +  \n" \
-"                                       filter_y*dim_strides[6] + out_channel*dim_strides[7]];  \n" \
-"                total += (input_value * filter_value);  \n" \
-"              }  \n" \
-"            }  \n" \
-"          }  \n" \
-"        }  \n" \
-"        float bias_value = 0.0f;  \n" \
-"        if (bias_data) {  \n" \
-"          bias_value = bias_data[out_channel*dim_strides[8]];  \n" \
-"        }  \n" \
-"        float max = total+bias_value; \n" \
-"        if(max < output_activation_min) max = output_activation_min; \n" \
-"        float min = max; \n" \
-"        if(min > output_activation_max) min = output_activation_max; \n" \
-"        output_data[out_channel*dim_strides[12] + out_x*dim_strides[13] +   \n" \
-"                     out_y*dim_strides[14] + batch*dim_strides[15]] = min; \n" \
-"      }  \n" \
-"    }  \n" \
-"  }  \n" \
-"}  \n" \
-"\n";
+// const char *kernelSource =           "\n" \
+// "__kernel void conv(__global float* input_data,   \n" \
+// "          __global float* filter_data,   \n" \
+// "          __global float* bias_data,   \n" \
+// "          __global float* output_data,  \n" \
+// "          int stride_width, int stride_height,   \n" \
+// "          int pad_width, int pad_height,   \n" \
+// "          __global int* dim_sizes, __global int* dim_strides,  \n" \
+// "          float output_activation_min, float output_activation_max) {  \n" \
+// "  int gid = get_global_id(0);  \n" \
+// "  const int batches = dim_sizes[3];  \n" \
+// "  const int input_depth = dim_sizes[0];  \n" \
+// "  const int output_depth = dim_sizes[7];  \n" \
+// "  int batch = gid/output_depth;  \n" \
+// "  int out_channel = gid%output_depth;  \n" \
+// "  if(gid < batches*output_depth) {  \n" \
+// "    const int input_height = dim_sizes[2];  \n" \
+// "    const int input_width = dim_sizes[1];  \n" \
+// "    const int filter_height = dim_sizes[6];  \n" \
+// "    const int filter_width = dim_sizes[5];  \n" \
+// "    const int output_height = dim_sizes[14];  \n" \
+// "    const int output_width = dim_sizes[13];  \n" \
+// "    for (int out_y = 0; out_y < output_height; ++out_y) {  \n" \
+// "      for (int out_x = 0; out_x < output_width; ++out_x) {  \n" \
+// "        const int in_x_origin = (out_x * stride_width) - pad_width;  \n" \
+// "        const int in_y_origin = (out_y * stride_height) - pad_height;  \n" \
+// "        float total = 0.f;  \n" \
+// "        for (int filter_y = 0; filter_y < filter_height; ++filter_y) {  \n" \
+// "          for (int filter_x = 0; filter_x < filter_width; ++filter_x) {  \n" \
+// "            for (int in_channel = 0; in_channel < input_depth; ++in_channel) {  \n" \
+// "              const int in_x = in_x_origin + filter_x;  \n" \
+// "              const int in_y = in_y_origin + filter_y;  \n" \
+// "              if ((in_x >= 0) && (in_x < input_width) && (in_y >= 0) &&  \n" \
+// "                  (in_y < input_height)) {  \n" \
+// "                float input_value = input_data[in_channel*dim_strides[0] + in_x*dim_strides[1] +   \n" \
+// "                                                in_y*dim_strides[2] + batch*dim_strides[3]];  \n" \
+// "                float filter_value =  \n" \
+// "                    filter_data[in_channel*dim_strides[4] + filter_x*dim_strides[5] +  \n" \
+// "                                       filter_y*dim_strides[6] + out_channel*dim_strides[7]];  \n" \
+// "                total += (input_value * filter_value);  \n" \
+// "              }  \n" \
+// "            }  \n" \
+// "          }  \n" \
+// "        }  \n" \
+// "        float bias_value = 0.0f;  \n" \
+// "        if (bias_data) {  \n" \
+// "          bias_value = bias_data[out_channel*dim_strides[8]];  \n" \
+// "        }  \n" \
+// "        float max = total+bias_value; \n" \
+// "        if(max < output_activation_min) max = output_activation_min; \n" \
+// "        float min = max; \n" \
+// "        if(min > output_activation_max) min = output_activation_max; \n" \
+// "        output_data[out_channel*dim_strides[12] + out_x*dim_strides[13] +   \n" \
+// "                     out_y*dim_strides[14] + batch*dim_strides[15]] = min; \n" \
+// "      }  \n" \
+// "    }  \n" \
+// "  }  \n" \
+// "}  \n" \
+// "\n";
 
 
 class EigenThreadPoolWrapper : public Eigen::ThreadPoolInterface {
@@ -365,80 +365,109 @@ public:
         outputActivationMin = output_activation_min;
         outputActivationMax = output_activation_max;
 
+        // Start Timers
+        double wall0 = get_wall_time();
+        double cpu0  = get_cpu_time();
         createInstance();
+        // Stop timers
+        double wall1 = get_wall_time();
+        double cpu1  = get_cpu_time();
+        double wall = wall1 - wall0;
+        double cpu = cpu1 - cpu0;
+        __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createInstance: %lf", wall);
+        
+        wall0 = get_wall_time();
+        cpu0  = get_cpu_time();
         findPhysicalDevice();
+        wall1 = get_wall_time();
+        cpu1  = get_cpu_time();
+        wall = wall1 - wall0;
+        cpu = cpu1 - cpu0;
+        __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "findPhysicalDevice: %lf", wall);
+        
+        wall0 = get_wall_time();
+        cpu0  = get_cpu_time();
         createDevice();
+        wall1 = get_wall_time();
+        cpu1  = get_cpu_time();
+        wall = wall1 - wall0;
+        cpu = cpu1 - cpu0;
+        __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createDevice: %lf", wall);
+        
+        wall0 = get_wall_time();
+        cpu0  = get_cpu_time();
         createBuffer();
+        wall1 = get_wall_time();
+        cpu1  = get_cpu_time();
+        wall = wall1 - wall0;
+        cpu = cpu1 - cpu0;
+        __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createBuffer: %lf", wall);
+        
+        wall0 = get_wall_time();
+        cpu0  = get_cpu_time();
         createDescriptorSetLayout();
+        wall1 = get_wall_time();
+        cpu1  = get_cpu_time();
+        wall = wall1 - wall0;
+        cpu = cpu1 - cpu0;
+        __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createDescriptorSetLayout: %lf", wall);
+        
+        wall0 = get_wall_time();
+        cpu0  = get_cpu_time();
         createDescriptorSet();
+        wall1 = get_wall_time();
+        cpu1  = get_cpu_time();
+        wall = wall1 - wall0;
+        cpu = cpu1 - cpu0;
+        __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createDescriptorSet: %lf", wall);
+        
+        wall0 = get_wall_time();
+        cpu0  = get_cpu_time();
         createComputePipeline();
+        wall1 = get_wall_time();
+        cpu1  = get_cpu_time();
+        wall = wall1 - wall0;
+        cpu = cpu1 - cpu0;
+        __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createComputePipeline: %lf", wall);
+        
+        wall0 = get_wall_time();
+        cpu0  = get_cpu_time();
         createCommandBuffer();
+        wall1 = get_wall_time();
+        cpu1  = get_cpu_time();
+        wall = wall1 - wall0;
+        cpu = cpu1 - cpu0;
+        __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createCommandBuffer: %lf", wall);
+        
+        wall0 = get_wall_time();
+        cpu0  = get_cpu_time();
         runCommandBuffer();
+        wall1 = get_wall_time();
+        cpu1  = get_cpu_time();
+        wall = wall1 - wall0;
+        cpu = cpu1 - cpu0;
+        __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "runCommandBuffer: %lf", wall);
+        
+        wall0 = get_wall_time();
+        cpu0  = get_cpu_time();
         getresult();
+        wall1 = get_wall_time();
+        cpu1  = get_cpu_time();
+        wall = wall1 - wall0;
+        cpu = cpu1 - cpu0;
+        __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "getResult: %lf", wall);
+        
+        wall0 = get_wall_time();
+        cpu0  = get_cpu_time();
         cleanup();
+        wall1 = get_wall_time();
+        cpu1  = get_cpu_time();
+        wall = wall1 - wall0;
+        cpu = cpu1 - cpu0;
+        __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "cleanup: %lf", wall);
     }
 
-    static VKAPI_ATTR VkBool32 VKAPI_CALL debugReportCallbackFn(
-        VkDebugReportFlagsEXT                       flags,
-        VkDebugReportObjectTypeEXT                  objectType,
-        uint64_t                                    object,
-        size_t                                      location,
-        int32_t                                     messageCode,
-        const char*                                 pLayerPrefix,
-        const char*                                 pMessage,
-        void*                                       pUserData) {
-
-        __android_log_print(ANDROID_LOG_INFO, "Vulkanerror", "Debug Report: %s: %s\n", pLayerPrefix, pMessage);
-
-        return VK_FALSE;
-     }
-
-
     void createInstance() {
-        // std::vector<const char *> enabledExtensions;
-        // if (enableValidationLayers) {
-        //     uint32_t layerCount;
-        //     vkEnumerateInstanceLayerProperties(&layerCount, NULL);
-
-        //     std::vector<VkLayerProperties> layerProperties(layerCount);
-        //     vkEnumerateInstanceLayerProperties(&layerCount, layerProperties.data());
-
-        //     bool foundLayer = false;
-        //     for (VkLayerProperties prop : layerProperties) {
-                
-        //         if (strcmp("VK_LAYER_LUNARG_standard_validation", prop.layerName) == 0) {
-        //             foundLayer = true;
-        //             break;
-        //         }
-
-        //     }
-            
-        //     if (!foundLayer) {
-        //         throw std::runtime_error("Layer VK_LAYER_LUNARG_standard_validation not supported\n");
-        //     }
-        //     enabledLayers.push_back("VK_LAYER_LUNARG_standard_validation"); // Alright, we can use this layer.
-            
-        //     uint32_t extensionCount;
-            
-        //     vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, NULL);
-        //     std::vector<VkExtensionProperties> extensionProperties(extensionCount);
-        //     vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, extensionProperties.data());
-
-        //     bool foundExtension = false;
-        //     for (VkExtensionProperties prop : extensionProperties) {
-        //         if (strcmp(VK_EXT_DEBUG_REPORT_EXTENSION_NAME, prop.extensionName) == 0) {
-        //             foundExtension = true;
-        //             break;
-        //         }
-
-        //     }
-
-        //     if (!foundExtension) {
-        //         throw std::runtime_error("Extension VK_EXT_DEBUG_REPORT_EXTENSION_NAME not supported\n");
-        //     }
-        //     enabledExtensions.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
-        // }
-
         VkApplicationInfo applicationInfo = {};
         applicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
         applicationInfo.pApplicationName = "Matrix Convolution";
@@ -452,32 +481,10 @@ public:
         createInfo.flags = 0;
         createInfo.pApplicationInfo = &applicationInfo;
 
-        // // Give our desired layers and extensions to vulkan.
-        // createInfo.enabledLayerCount = enabledLayers.size();
-        // createInfo.ppEnabledLayerNames = enabledLayers.data();
-        // createInfo.enabledExtensionCount = enabledExtensions.size();
-        // createInfo.ppEnabledExtensionNames = enabledExtensions.data();
-
         VK_CHECK_RESULT(vkCreateInstance(
             &createInfo,
             NULL,
             &instance));
-
-        // if (enableValidationLayers) {
-        //     VkDebugReportCallbackCreateInfoEXT createInfo = {};
-        //     createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
-        //     createInfo.flags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT | VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT;
-        //     createInfo.pfnCallback = &debugReportCallbackFn;
-
-        //     // We have to explicitly load this function.
-        //     auto vkCreateDebugReportCallbackEXT = (PFN_vkCreateDebugReportCallbackEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugReportCallbackEXT");
-        //     if (vkCreateDebugReportCallbackEXT == nullptr) {
-        //         throw std::runtime_error("Could not load vkCreateDebugReportCallbackEXT");
-        //     }
-
-        //     // Create and register callback.
-        //     VK_CHECK_RESULT(vkCreateDebugReportCallbackEXT(instance, &createInfo, NULL, &debugReportCallback));
-        // }
     }
 
     void findPhysicalDevice() {
@@ -536,8 +543,6 @@ public:
         VkPhysicalDeviceFeatures deviceFeatures = {};
 
         deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-        // deviceCreateInfo.enabledLayerCount = enabledLayers.size();  // need to specify validation layers here as well.
-        // deviceCreateInfo.ppEnabledLayerNames = enabledLayers.data();
         deviceCreateInfo.pQueueCreateInfos = &queueCreateInfo; // when creating the logical device, we also specify what queues it has.
         deviceCreateInfo.queueCreateInfoCount = 1;
         deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
@@ -576,76 +581,20 @@ public:
         matrixSizesCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
 
         VK_CHECK_RESULT(vkCreateBuffer(device, &matrixSizesCreateInfo, NULL, &matrixSizes)); // create buffer.
-
-        // VkBufferCreateInfo matrixSizesCreateInfo = {};
-        // matrixACreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        // matrixACreateInfo.size = matrixSizesSize; // buffer size in bytes. 
-        // matrixACreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a uniform buffer.
-        // matrixACreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
-
-        // VK_CHECK_RESULT(vkCreateBuffer(device, &matrixSizesCreateInfo, NULL, &matrixSizes)); // create buffer.
-
-        // VkBufferCreateInfo matrixCCreateInfo = {};
-        // matrixACreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        // matrixACreateInfo.size = matrixCSize; // buffer size in bytes. 
-        // matrixACreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
-        // matrixACreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
-
-        // VK_CHECK_RESULT(vkCreateBuffer(device, &matrixCCreateInfo, NULL, &matrixC)); // create buffer.
         
         VkMemoryRequirements memoryRequirementsmatrixA, memoryRequirementsmatrixSizes;
         vkGetBufferMemoryRequirements(device, matrixA, &memoryRequirementsmatrixA);
         vkGetBufferMemoryRequirements(device, matrixSizes, &memoryRequirementsmatrixSizes);
 
-        // VkMemoryRequirements memoryRequirementsmatrixA, memoryRequirementsmatrixB, 
-        //         memoryRequirementsmatrixC, memoryRequirementsmatrixSizes;
-        // vkGetBufferMemoryRequirements(device, matrixA, &memoryRequirementsmatrixA);
-        // vkGetBufferMemoryRequirements(device, matrixB, &memoryRequirementsmatrixB);
-        // vkGetBufferMemoryRequirements(device, matrixSizes, &memoryRequirementsmatrixSizes);
-        // vkGetBufferMemoryRequirements(device, matrixC, &memoryRequirementsmatrixC);
-        
-        
-        // const VkDeviceSize memorySizematA = memoryRequirementsmatrixA.size;
-        // const VkDeviceSize memorySizematB = memoryRequirementsmatrixB.size;
-        // const VkDeviceSize memorySizematC = memoryRequirementsmatrixC.size; 
-        // const VkDeviceSize memorySizeS = memoryRequirementsmatrixSizes.size;
         const VkDeviceSize memorySize = memoryRequirementsmatrixA.size+memoryRequirementsmatrixSizes.size;
-
-        // VkMemoryAllocateInfo allocateInfomatA = {};
-        // allocateInfomatA.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        // allocateInfomatA.allocationSize = memorySizematA; // specify required memory.
-
-        // VkMemoryAllocateInfo allocateInfomatB = {};
-        // allocateInfomatB.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        // allocateInfomatB.allocationSize = memorySizematB; // specify required memory.
-
-        // VkMemoryAllocateInfo allocateInfomatC = {};
-        // allocateInfomatC.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        // allocateInfomatC.allocationSize = memorySizematC; // specify required memory.
-
-        // VkMemoryAllocateInfo allocateInfoS = {};
-        // allocateInfoS.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        // allocateInfoS.allocationSize = memorySizeS; // specify required memory.
 
         VkMemoryAllocateInfo allocateInfo = {};
         allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
         allocateInfo.allocationSize = memorySize; // specify required memory.
 
-        // allocateInfomatA.memoryTypeIndex = findMemoryType(
-        //     memorySizematA, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-        // allocateInfomatB.memoryTypeIndex = findMemoryType(
-        //     memorySizematB, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-        // allocateInfomatC.memoryTypeIndex = findMemoryType(
-        //     memorySizematC, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-        // allocateInfoS.memoryTypeIndex = findMemoryType(
-        //     memorySizeS, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
         allocateInfo.memoryTypeIndex = findMemoryType(
             memorySize, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
-        // VK_CHECK_RESULT(vkAllocateMemory(device, &allocateInfomatA, NULL, &bufferMemorymatA)); // allocate memory on device.
-        // VK_CHECK_RESULT(vkAllocateMemory(device, &allocateInfomatB, NULL, &bufferMemorymatB));
-        // VK_CHECK_RESULT(vkAllocateMemory(device, &allocateInfomatC, NULL, &bufferMemorymatC));
-        // VK_CHECK_RESULT(vkAllocateMemory(device, &allocateInfoS, NULL, &bufferMemoryS));
         VK_CHECK_RESULT(vkAllocateMemory(device, &allocateInfo, NULL, &bufferMemory));
 
         float* oActMinMaxtmp;
@@ -695,9 +644,7 @@ public:
         vkUnmapMemory(device, bufferMemory);
 
         VK_CHECK_RESULT(vkBindBufferMemory(device, matrixA, bufferMemory, 0));
-        // VK_CHECK_RESULT(vkBindBufferMemory(device, matrixB, bufferMemory, matrixASize));
         VK_CHECK_RESULT(vkBindBufferMemory(device, matrixSizes, bufferMemory, matrixASize+matrixBSize+matrixCSize));
-        // VK_CHECK_RESULT(vkBindBufferMemory(device, matrixC, bufferMemory, matrixASize+matrixBSize+matrixSizesSize));
     }
 
     void createDescriptorSetLayout() {
@@ -715,18 +662,6 @@ public:
         descriptorSetLayoutBindings[1].descriptorCount = 1;
         descriptorSetLayoutBindings[1].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
-        // descriptorSetLayoutBindings[2] = {};
-        // descriptorSetLayoutBindings[2].binding = 2; // binding = 3
-        // descriptorSetLayoutBindings[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        // descriptorSetLayoutBindings[2].descriptorCount = 1;
-        // descriptorSetLayoutBindings[2].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-
-        // descriptorSetLayoutBindings[3] = {};
-        // descriptorSetLayoutBindings[3].binding = 3; // binding = 2
-        // descriptorSetLayoutBindings[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        // descriptorSetLayoutBindings[3].descriptorCount = 1;
-        // descriptorSetLayoutBindings[3].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-
         VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {};
         descriptorSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
         descriptorSetLayoutCreateInfo.bindingCount = 2; // only a single binding in this descriptor set layout. 
@@ -736,24 +671,6 @@ public:
     }
 
     void createDescriptorSet() {
-        // VkDescriptorPoolSize descriptorPoolSizes[4];
-
-        // descriptorPoolSizes[0] = {};
-        // descriptorPoolSizes[0].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        // descriptorPoolSizes[0].descriptorCount = 1;
-
-        // descriptorPoolSizes[1] = {};
-        // descriptorPoolSizes[1].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        // descriptorPoolSizes[1].descriptorCount = 1;
-
-        // descriptorPoolSizes[2] = {};
-        // descriptorPoolSizes[2].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        // descriptorPoolSizes[2].descriptorCount = 1;
-
-        // descriptorPoolSizes[3] = {};
-        // descriptorPoolSizes[3].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        // descriptorPoolSizes[3].descriptorCount = 1;
-
         VkDescriptorPoolSize descriptorPoolSize;
 
         descriptorPoolSize = {};
@@ -781,20 +698,10 @@ public:
         descriptorBufferInfoMatA.offset = 0;
         descriptorBufferInfoMatA.range = VK_WHOLE_SIZE;
 
-        // VkDescriptorBufferInfo descriptorBufferInfoMatB = {};
-        // descriptorBufferInfoMatB.buffer = matrixB;
-        // descriptorBufferInfoMatB.offset = 0;
-        // descriptorBufferInfoMatB.range = VK_WHOLE_SIZE;
-
         VkDescriptorBufferInfo descriptorBufferInfoMatSizes = {};
         descriptorBufferInfoMatSizes.buffer = matrixSizes;
         descriptorBufferInfoMatSizes.offset = 0;
         descriptorBufferInfoMatSizes.range = VK_WHOLE_SIZE;
-
-        // VkDescriptorBufferInfo descriptorBufferInfoMatC = {};
-        // descriptorBufferInfoMatC.buffer = matrixC;
-        // descriptorBufferInfoMatC.offset = 0;
-        // descriptorBufferInfoMatC.range = VK_WHOLE_SIZE;
 
         VkWriteDescriptorSet writeDescriptorSets[2];
 
@@ -814,60 +721,29 @@ public:
         writeDescriptorSets[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; // storage buffer.
         writeDescriptorSets[1].pBufferInfo = &descriptorBufferInfoMatSizes;
 
-        // writeDescriptorSets[2] = {};
-        // writeDescriptorSets[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        // writeDescriptorSets[2].dstSet = descriptorSet; // write to this descriptor set.
-        // writeDescriptorSets[2].dstBinding = 2; // write to the first, and only binding.
-        // writeDescriptorSets[2].descriptorCount = 1; // update a single descriptor.
-        // writeDescriptorSets[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; // storage buffer.
-        // writeDescriptorSets[2].pBufferInfo = &descriptorBufferInfoMatSizes;
-
-        // writeDescriptorSets[3] = {};
-        // writeDescriptorSets[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        // writeDescriptorSets[3].dstSet = descriptorSet; // write to this descriptor set.
-        // writeDescriptorSets[3].dstBinding = 3; // write to the first, and only binding.
-        // writeDescriptorSets[3].descriptorCount = 1; // update a single descriptor.
-        // writeDescriptorSets[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; // storage buffer.
-        // writeDescriptorSets[3].pBufferInfo = &descriptorBufferInfoMatC;
-
         vkUpdateDescriptorSets(device, 2, writeDescriptorSets, 0, NULL);
     }
 
     void createComputePipeline() {
-        VkPhysicalDeviceProperties devprops;
-        vkGetPhysicalDeviceProperties(physicalDevice, &devprops);
-        __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxComputeSharedMemorySize: %d", devprops.limits.maxComputeSharedMemorySize);
-        __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxComputeWorkGroupCount[3]: %d %d %d", devprops.limits.maxComputeWorkGroupCount[0], devprops.limits.maxComputeWorkGroupCount[1], devprops.limits.maxComputeWorkGroupCount[2]);
-        __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxComputeWorkGroupInvocations: %d", devprops.limits.maxComputeWorkGroupInvocations);
-        __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxComputeWorkGroupSize[3]: %d %d %d", devprops.limits.maxComputeWorkGroupSize[0], devprops.limits.maxComputeWorkGroupSize[1], devprops.limits.maxComputeWorkGroupSize[2]);
-        __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxDescriptorSetStorageBuffers: %d", devprops.limits.maxDescriptorSetStorageBuffers);
-        __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxPerStageDescriptorStorageBuffers: %d", devprops.limits.maxPerStageDescriptorStorageBuffers);
-        __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxPerStageResources: %d", devprops.limits.maxPerStageResources);
-        __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxStorageBufferRange: %d", devprops.limits.maxStorageBufferRange);
+        // VkPhysicalDeviceProperties devprops;
+        // vkGetPhysicalDeviceProperties(physicalDevice, &devprops);
+        // __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxComputeSharedMemorySize: %d", devprops.limits.maxComputeSharedMemorySize);
+        // __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxComputeWorkGroupCount[3]: %d %d %d", devprops.limits.maxComputeWorkGroupCount[0], devprops.limits.maxComputeWorkGroupCount[1], devprops.limits.maxComputeWorkGroupCount[2]);
+        // __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxComputeWorkGroupInvocations: %d", devprops.limits.maxComputeWorkGroupInvocations);
+        // __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxComputeWorkGroupSize[3]: %d %d %d", devprops.limits.maxComputeWorkGroupSize[0], devprops.limits.maxComputeWorkGroupSize[1], devprops.limits.maxComputeWorkGroupSize[2]);
+        // __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxDescriptorSetStorageBuffers: %d", devprops.limits.maxDescriptorSetStorageBuffers);
+        // __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxPerStageDescriptorStorageBuffers: %d", devprops.limits.maxPerStageDescriptorStorageBuffers);
+        // __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxPerStageResources: %d", devprops.limits.maxPerStageResources);
+        // __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxStorageBufferRange: %d", devprops.limits.maxStorageBufferRange);
 
-        // std::string source =
-            // "#version 450 \n" \
-            // "#extension GL_ARB_separate_shader_objects : enable \n" \
-            // "layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in; \n" \
-            // "layout(binding = 0) buffer floatBuffer { \n" \
-            // "    float convFloatB[]; \n" \
-            // "}; \n" \
-            // "layout(binding = 1) readonly buffer intBuffer { \n" \
-            // "    int convIntB[]; \n" \
-            // "}; \n" \
-            // "void main() { \n" \
-            // "  int gid0 = int(gl_GlobalInvocationID.x); \n" \
-            // "  int gid1 = int(gl_GlobalInvocationID.y); \n" \
-            // "  int output_depth = convIntB[11]; \n" \
-            // "  int output_width = convIntB[17]; \n" \
-            // "  if((gid0*24+gid1) < 144) { \n" \
-            // "        convFloatB[2 + convIntB[36] + convIntB[37] + convIntB[38] + (gid0*24+gid1)] = 20.0; \n" \
-            // "  } \n" \
-            // "}";
+        // Start Timers
+        double wall0 = get_wall_time();
+        double cpu0  = get_cpu_time();
+
         std::string source =
         "#version 450 \n" \
         "#extension GL_ARB_separate_shader_objects : enable \n" \
-        "layout(local_size_x = 8, local_size_y = 32, local_size_z = 1) in; \n" \
+        "layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in; \n" \
         "layout(binding = 0) buffer floatBuffer { \n" \
         "    float convFloatB[]; \n" \
         "}; \n" \
@@ -875,142 +751,36 @@ public:
         "    int convIntB[]; \n" \
         "}; \n" \
         "void main() { \n" \
-        "  int gid0 = int(gl_GlobalInvocationID.x); \n" \
-        "  int gid1 = int(gl_GlobalInvocationID.y); \n" \
-        "  int output_depth = convIntB[11]; \n" \
-        "  int output_width = convIntB[17]; \n" \
-        "  if((gid0 < convIntB[7]*output_depth) && (gid1 < convIntB[18]*output_width)) { \n" \
-        "        int var1 = gid0/output_depth; \n" \
-        "        int var2 = int(mod(gid1,output_width)); \n" \
-        "        int var3 = int(mod(gid0,output_depth)); \n" \
-        "        int var4 = gid1/output_width; \n" \
+        "  int out_channel = int(gl_GlobalInvocationID.x); \n" \
+        "  int out_y = int(gl_GlobalInvocationID.y); \n" \
+        "  int out_x = int(gl_GlobalInvocationID.z); \n" \
+        "  if((out_channel < convIntB[11]) && (out_x < convIntB[17]) && (out_y < convIntB[18])) { \n" \
+        "      for (int batch = 0; batch < convIntB[7]; ++batch) { \n" \
         "        float total = 0.0; \n" \
         "        for (int filter_y = 0; filter_y < convIntB[10]; ++filter_y) { \n" \
         "          for (int filter_x = 0; filter_x < convIntB[9]; ++filter_x) { \n" \
         "            for (int in_channel = 0; in_channel < convIntB[4]; ++in_channel) { \n" \
-        "              int in_x = (var2 * convIntB[0] - convIntB[2]) + filter_x; \n" \
-        "              int in_y = (var4 * convIntB[1] - convIntB[3]) + filter_y; \n" \
+        "              int in_x = (out_x * convIntB[0] - convIntB[2]) + filter_x; \n" \
+        "              int in_y = (out_y * convIntB[1] - convIntB[3]) + filter_y; \n" \
         "              if ((in_x >= 0) && (in_x < convIntB[5]) && (in_y >= 0) && \n" \
         "                  (in_y < convIntB[6])) { \n" \
-        "                total += (convFloatB[2 + in_channel*convIntB[20] + in_x*convIntB[21] +in_y*convIntB[22] + var1*convIntB[23]] *  \n" \
-        "                        convFloatB[convIntB[36] + 2 + in_channel*convIntB[24] + filter_x*convIntB[25] + filter_y*convIntB[26] + var3*convIntB[27]]); \n" \
+        "                total += (convFloatB[2 + in_channel*convIntB[20] + in_x*convIntB[21] +in_y*convIntB[22] + batch*convIntB[23]] *  \n" \
+        "                        convFloatB[convIntB[36] + 2 + in_channel*convIntB[24] + filter_x*convIntB[25] + filter_y*convIntB[26] + out_channel*convIntB[27]]); \n" \
         "              } \n" \
         "            } \n" \
         "          } \n" \
         "        } \n" \
         "        float bias_value = 0.0; \n" \
         "        if (convIntB[38] > 0) { \n" \
-        "          bias_value = convFloatB[convIntB[36] + 2 + convIntB[37]+(var3*convIntB[28])]; \n" \
+        "          bias_value = convFloatB[convIntB[36] + 2 + convIntB[37]+(out_channel*convIntB[28])]; \n" \
         "        } \n" \
-        "        float max = total+bias_value; \n" \
-        "        if(max < convFloatB[0]) max = convFloatB[0]; \n" \
-        "        float min = max; \n" \
-        "        if(min > convFloatB[1]) min = convFloatB[1]; \n" \
-        "        convFloatB[2 + convIntB[36] + convIntB[37] + convIntB[38] + var3*convIntB[32] + var2*convIntB[33] + var4*convIntB[34] + var1*convIntB[35]] = min; \n" \
+        "        convFloatB[2 + convIntB[36] + convIntB[37] + convIntB[38] + out_channel*convIntB[32] + out_x*convIntB[33] + out_y*convIntB[34] + batch*convIntB[35]] = min(max(total + bias_value,convFloatB[0]),convFloatB[1]); \n" \
+        "      } \n" \
         "  } \n" \
         "}";
-        // std::string source =
-        //     "#version 450 \n" \
-        //     "#extension GL_ARB_separate_shader_objects : enable \n" \
-        //     "layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in; \n" \
-        //     "layout(binding = 0) buffer floatBuffer { \n" \
-        //     "    float convFloatB[]; \n" \
-        //     "}; \n" \
-        //     "layout(binding = 1) readonly buffer intBuffer { \n" \
-        //     "    int convIntB[]; \n" \
-        //     "}; \n" \
-        //     "void main() { \n" \
-        //     "  int gid0 = int(gl_GlobalInvocationID.x); \n" \
-        //     "  int gid1 = int(gl_GlobalInvocationID.y); \n" \
-        //     "  if((gid0 < convIntB[7]*"+to_string(dimSizes[7])+") && (gid1 < convIntB[18]*"+to_string(dimSizes[13])+")) { \n" \
-        //     "        float total = 0.0; \n" \
-        //     "        for (int filter_y = 0; filter_y < convIntB[10]; filter_y++) { \n" \
-        //     "          for (int filter_x = 0; filter_x < convIntB[9]; filter_x++) { \n" \
-        //     "            for (int in_channel = 0; in_channel < convIntB[4]; in_channel++) { \n" \
-        //     "              int in_x = ((int(mod(gid1,"+to_string(dimSizes[13])+"))) * convIntB[0] - convIntB[2]) + filter_x; \n" \
-        //     "              int in_y = ((gid1/"+to_string(dimSizes[13])+") * convIntB[1] - convIntB[3]) + filter_y; \n" \
-        //     "              if ((in_x >= 0) && (in_x < convIntB[5]) && (in_y >= 0) && \n" \
-        //     "                  (in_y < convIntB[6])) { \n" \
-        //     "                total += (convFloatB[2 + in_channel*convIntB[20] + in_x*convIntB[21] +in_y*convIntB[22] + (gid0/"+to_string(dimSizes[7])+")*convIntB[23]] *  \n" \
-        //     "                        convFloatB[convIntB[36] + 2 + in_channel*convIntB[24] + filter_x*convIntB[25] + filter_y*convIntB[26] + (int(mod(gid0,"+to_string(dimSizes[7])+")))*convIntB[27]]); \n" \
-        //     "              } \n" \
-        //     "            } \n" \
-        //     "          } \n" \
-        //     "        } \n" \
-        //     "        float bias_value = 0.0; \n" \
-        //     "        if (convIntB[38] > 0) { \n" \
-        //     "          bias_value = convFloatB[convIntB[36] + 2 + convIntB[37])+((int(mod(gid0,"+to_string(dimSizes[7])+")))*convIntB[28])]; \n" \
-        //     "        } \n" \
-        //     "        float max = total+bias_value; \n" \
-        //     "        if(max < convFloatB[0]) max = convFloatB[0]; \n" \
-        //     "        float min = max; \n" \
-        //     "        if(min > convFloatB[1]) min = convFloatB[1]; \n" \
-        //     "        convFloatB[2 + convIntB[36] + convIntB[37] + convIntB[38] + (int(mod(gid0,"+to_string(dimSizes[7])+")))*convIntB[32] + (int(mod(gid1,"+to_string(dimSizes[13])+")))*convIntB[33] + (gid1/"+to_string(dimSizes[17])+")*convIntB[34] + (gid0/"+to_string(dimSizes[13])+")*convIntB[35]] = min; \n" \
-        //     "  } \n" \
-        //     "}";
-
-            __android_log_print(ANDROID_LOG_INFO, "VulkanCode", "codeStr : %s", source.c_str());
-
-            // "#version 450 \n" \
-            // "#extension GL_ARB_separate_shader_objects : enable \n" \
-            // "layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in; \n" \
-            // "layout(binding = 0) readonly buffer inputData { \n" \
-            // "    float iData[]; \n" \
-            // "}; \n" \
-            // "layout(binding = 1) readonly buffer filterBiasActivationMinMax { \n" \
-            // "    float oActMin; \n" \
-            // "    float oActMax; \n" \
-            // "    float fData[]; \n" \
-            // "}; \n" \
-            // "layout(binding = 2) readonly buffer dimSizeStrideStridePad { \n" \
-            // "    int strideWidth; \n" \
-            // "    int strideHeight; \n" \
-            // "    int padWidth; \n" \
-            // "    int padHeight; \n" \
-            // "    int dimSizes[16]; \n" \
-            // "    int dimStrides[16]; \n" \
-            // "}; \n" \
-            // "layout(binding = 3) buffer outputData { \n" \
-            // "    float oData[]; \n" \
-            // "}; \n" \
-            // "void main() { \n" \
-            // "  int gid0 = int(gl_GlobalInvocationID.x); \n" \
-            // "  int gid1 = int(gl_GlobalInvocationID.y); \n" \
-            // "  int output_depth = dimSizes[7]; \n" \
-            // "  int output_width = dimSizes[13]; \n" \
-            // "  if((gid0 < dimSizes[3]*output_depth) && (gid1 < dimSizes[14]*output_width)) { \n" \
-            // "        float total = 0.0; \n" \
-            // "        for (int filter_y = 0; filter_y < dimSizes[6]; ++filter_y) { \n" \
-            // "          for (int filter_x = 0; filter_x < dimSizes[5]; ++filter_x) { \n" \
-            // "            for (int in_channel = 0; in_channel < dimSizes[0]; ++in_channel) { \n" \
-            // "              int in_x = ((int(mod(gid1,output_width)) * strideWidth) - padWidth) + filter_x; \n" \
-            // "              int in_y = (((gid1/output_width) * strideHeight) - padHeight) + filter_y; \n" \
-            // "              if ((in_x >= 0) && (in_x < dimSizes[1]) && (in_y >= 0) && \n" \
-            // "                  (in_y < dimSizes[2])) { \n" \
-            // "                total += (iData[in_channel*dimStrides[0] + in_x*dimStrides[1] +in_y*dimStrides[2] + (gid0/output_depth)*dimStrides[3]] *  \n" \
-            // "                        fData[in_channel*dimStrides[4] + filter_x*dimStrides[5] + filter_y*dimStrides[6] + int(mod(gid0,output_depth))*dimStrides[7]]); \n" \
-            // "              } \n" \
-            // "            } \n" \
-            // "          } \n" \
-            // "        } \n" \
-            // "        float bias_value = 0.0; \n" \
-            // "        if (dimSizes[8]*dimSizes[9]*dimSizes[10]*dimSizes[11] > 0) { \n" \
-            // "          bias_value = fData[(dimSizes[4]*dimSizes[5]*dimSizes[6]*dimSizes[7])+(int(mod(gid0,output_depth))*dimStrides[8])]; \n" \
-            // "        } \n" \
-            // "        float max = total+bias_value; \n" \
-            // "        if(max < oActMin) max = oActMin; \n" \
-            // "        float min = max; \n" \
-            // "        if(min > oActMax) min = oActMax; \n" \
-            // "        oData[int(mod(gid0,output_depth))*dimStrides[12] + int(mod(gid1,output_width))*dimStrides[13] + \n" \
-            // "                     (gid1/output_width)*dimStrides[14] + (gid0/output_depth)*dimStrides[15]] = min; \n" \
-            // "  } \n" \
-            // "}";
-
 
         shaderc::Compiler compiler;
         shaderc::CompileOptions options;
-
-        // // options.AddMacroDefinition("MY_DEFINE", "1");
 
         shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(
           source.c_str(), source.size(), shaderc_glsl_compute_shader, "conv.glsl", options);
@@ -1021,12 +791,19 @@ public:
 
         std::vector<uint32_t> code(module.cbegin(), module.cend());
 
+        // Stop timers
+        double wall1 = get_wall_time();
+        double cpu1  = get_cpu_time();
+        double wall = wall1 - wall0;
+        double cpu = cpu1 - cpu0;
+        __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "compileShader: %lf", wall);
+
         VkShaderModuleCreateInfo createInfo = {};
         createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
         createInfo.pCode = code.data();
         createInfo.codeSize = sizeof(uint32_t)*code.size();
         
-        __android_log_print(ANDROID_LOG_INFO, "VulkanConv", "codeSize : %d", createInfo.codeSize);
+        // __android_log_print(ANDROID_LOG_INFO, "VulkanConv", "codeSize : %d", createInfo.codeSize);
 
         VK_CHECK_RESULT(vkCreateShaderModule(device, &createInfo, NULL, &computeShaderModule));
 
@@ -1077,11 +854,10 @@ public:
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, &descriptorSet, 0, NULL);
 
-        int batches = dimSizes[3];
         int output_depth = dimSizes[7];
         int output_height = dimSizes[14];  
         int output_width = dimSizes[13];
-        vkCmdDispatch(commandBuffer, (batches*output_depth-1)/8+1, (output_height*output_width-1)/32+1, 1);
+        vkCmdDispatch(commandBuffer, (output_depth-1)/8+1, (output_height-1)/8+1, (output_width-1)/8+1);
 
         VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffer)); // end recording commands.
     }
@@ -1092,61 +868,36 @@ public:
         submitInfo.commandBufferCount = 1; // submit a single command buffer
         submitInfo.pCommandBuffers = &commandBuffer; // the command buffer to submit.
 
-        // Start Timers
-        double wall0 = get_wall_time();
-        double cpu0  = get_cpu_time();
+        // // Start Timers
+        // double wall0 = get_wall_time();
+        // double cpu0  = get_cpu_time();
 
         VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, 0));
         VK_CHECK_RESULT(vkQueueWaitIdle(queue));
 
-        // Stop timers
-        double wall1 = get_wall_time();
-        double cpu1  = get_cpu_time();
+        // // Stop timers
+        // double wall1 = get_wall_time();
+        // double cpu1  = get_cpu_time();
 
-        double wall = wall1 - wall0;
-        double cpu = cpu1 - cpu0;
+        // double wall = wall1 - wall0;
+        // double cpu = cpu1 - cpu0;
 
-        __android_log_print(ANDROID_LOG_INFO, "VulkanConv", "runkernel: %lf", wall);
+        // __android_log_print(ANDROID_LOG_INFO, "VulkanConv", "runkernelV: %lf", wall);
     }
 
     void getresult() {
         float *matCtmp;
         VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 
             inputSize+(sizeof(float)*2)+filterSize+biasSize, outputSize, 0, (void **)&matCtmp));
-      
-        // double sumC = 0.0;
-        // for (int k = 0; k < outputSize/sizeof(float); k++) {
-        //   sumC += matCtmp[k];
-        //   if(k < 100) {
-        //       __android_log_print(ANDROID_LOG_INFO, "VulkanConv", "Conv %d: %lf", k, matCtmp[k]);
-        //   }
-        // }
 
         std::memcpy(outputData, matCtmp, outputSize);
-
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanConv", "Conv sumC: %lf", sumC);
 
         vkUnmapMemory(device, bufferMemory);  
     }
 
     void cleanup() {
-        // if (enableValidationLayers) {
-        //     // destroy callback.
-        //     auto func = (PFN_vkDestroyDebugReportCallbackEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugReportCallbackEXT");
-        //     if (func == nullptr) {
-        //         throw std::runtime_error("Could not load vkDestroyDebugReportCallbackEXT");
-        //     }
-        //     func(instance, debugReportCallback, NULL);
-        // }
-
-        // vkFreeMemory(device, bufferMemorymatA, NULL);
-        // vkFreeMemory(device, bufferMemorymatB, NULL);
-        // vkFreeMemory(device, bufferMemorymatC, NULL);
-        // vkFreeMemory(device, bufferMemoryS, NULL);
         vkFreeMemory(device, bufferMemory, NULL);
         vkDestroyBuffer(device, matrixA, NULL);
-        // vkDestroyBuffer(device, matrixB, NULL);
-        // vkDestroyBuffer(device, matrixC, NULL);
         vkDestroyBuffer(device, matrixSizes, NULL);
         vkDestroyShaderModule(device, computeShaderModule, NULL);
         vkDestroyDescriptorPool(device, descriptorPool, NULL);
@@ -1202,8 +953,8 @@ inline void OpenCLConv(const float* input_data, const int input_size,
   cl_kernel kernel;
 
   size_t globalSize0, globalSize1, localSize0, localSize1;
-  localSize0 = 32;
-  localSize1 = 32;
+  localSize0 = 8;
+  localSize1 = 8;
   
   int batches = dim_sizes[3];
   int output_depth = dim_sizes[7];
@@ -1217,9 +968,10 @@ inline void OpenCLConv(const float* input_data, const int input_size,
 
   globalSize0 = ceil(batches*output_depth/(localSize0*1.0))*localSize0;
   globalSize1 = ceil(output_height*output_width/(localSize1*1.0))*localSize1;
+  globalSize1 = ceil(output_height*output_width/(localSize1*1.0))*localSize1;
 
-  const size_t local[2] = { localSize0, localSize1 };
-  const size_t global[2] = { globalSize0, globalSize1 };
+  const size_t local[3] = { 8, 8, 8 };
+  const size_t global[3] = { (size_t) (((output_depth-1)/8+1)*8), (size_t) (((output_height-1)/8+1)*8), (size_t) (((output_width-1)/8+1)*8) };
 
   cl_int err;
 
@@ -1326,7 +1078,7 @@ inline void OpenCLConv(const float* input_data, const int input_size,
   wall0 = get_wall_time();
   cpu0  = get_cpu_time();
 
-  err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global, local, 0, NULL, NULL);
+  err = clEnqueueNDRangeKernel(queue, kernel, 3, NULL, global, local, 0, NULL, NULL);
 
   clFinish(queue);
 
@@ -1338,7 +1090,7 @@ inline void OpenCLConv(const float* input_data, const int input_size,
   cpu = cpu1 - cpu0;
 
   // note: andoird log
-  __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Walltime runkernel: %lf", wall);
+  __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Walltime runkernelO: %lf", wall);
 
   __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Converror: %d", err);
 
@@ -1496,7 +1248,9 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
                  float output_activation_min, float output_activation_max,
                  float* output_data, const Dims<4>& output_dims,
                  float* im2col_data, const Dims<4>& im2col_dims,
-                 cl_context context_cl, cl_command_queue queue, cl_program program) {
+                 cl_context context_cl, cl_command_queue queue, cl_program program,
+                 VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, 
+    VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex) {
   int inheightsize = input_dims.sizes[2];
   int inwidthsize = input_dims.sizes[1];
   int indepthsize = input_dims.sizes[0];
@@ -1594,6 +1348,9 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
   //         output_activation_min, output_activation_max,
   //         context_cl, queue, program);
 
+  double wall0 = get_wall_time();
+  double cpu0  = get_cpu_time();
+
   vulkanTestConv(input_data, input_size,
           filter_data, filter_size,
           bias_data, bias_size,
@@ -1602,6 +1359,13 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
           pad_width, pad_height, 
           sizes, strides,
           output_activation_min, output_activation_max);
+
+  // Stop timers
+  double wall1 = get_wall_time();
+  double cpu1  = get_cpu_time();
+  double wall = wall1 - wall0;
+  double cpu = cpu1 - cpu0;
+  __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "totalRuntime: %lf", wall);
 
   // Conv2(input_data, input_dims,
   //                filter_data, filter_dims,

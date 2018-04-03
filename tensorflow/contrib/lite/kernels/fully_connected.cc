@@ -30,6 +30,13 @@ limitations under the License.
 //note: android opencl
 #include "CL/cl.h"
 
+//note: vulkan
+#include "vulkan/vulkan.h"
+#include "vulkan/vk_platform.h"
+
+//note: shaderc
+#include "shaderc/shaderc.hpp"
+
 #include "tensorflow/contrib/lite/builtin_op_data.h"
 #include "tensorflow/contrib/lite/context.h"
 #include "tensorflow/contrib/lite/kernels/activation_functor.h"
@@ -74,6 +81,16 @@ constexpr int kOutputTensor = 0;
 cl_context context_cl_global = NULL;       
 cl_command_queue queue_global = NULL;
 cl_program program_global = NULL;
+
+VkDevice device_global = NULL;
+VkPipeline pipelineConv_global = NULL;
+VkPipeline pipelineMatmul_global = NULL;
+VkPipelineLayout pipelineLayoutMatmul_global = NULL;
+VkPipelineLayout pipelineLayoutConv_global = NULL;
+VkDescriptorSetLayout descriptorSetLayoutMatmul_global = NULL;
+VkDescriptorSetLayout descriptorSetLayoutConv_global = NULL;
+VkQueue queueV_global = NULL; 
+uint32_t queueFamilyIndex_global = 0;
 
 // const char *kernelSource =           "\n" \
 // "__kernel void matrixVectorMul(__global float* C,  \n" \
@@ -152,7 +169,9 @@ void* Init(TfLiteContext* context, const char* buffer, size_t length) {
 }
 
 void* InitOpenCL(TfLiteContext* context, const char* buffer, size_t length,
-  cl_context context_cl, cl_command_queue queue, cl_program program) {
+  cl_context context_cl, cl_command_queue queue, cl_program program,
+  VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, 
+    VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex) {
   // This is a builtin op, so we don't use the contents in 'buffer', if any.
   // Instead, we allocate a new object to carry information from Prepare() to
   // Eval().
@@ -175,6 +194,16 @@ void* InitOpenCL(TfLiteContext* context, const char* buffer, size_t length,
   context_cl_global = context_cl;
   program_global = program;
   queue_global = queue;
+
+  device_global = device;
+  pipelineConv_global = pipelineConv;
+  pipelineMatmul_global = pipelineMatmul;
+  pipelineLayoutMatmul_global = pipelineLayoutMatmul;
+  pipelineLayoutConv_global = pipelineLayoutConv;
+  descriptorSetLayoutMatmul_global = descriptorSetLayoutMatmul;
+  descriptorSetLayoutConv_global = descriptorSetLayoutConv;
+  queueV_global = queueV; 
+  queueFamilyIndex_global = queueFamilyIndex;
 
   //note: andoird log
   // __android_log_print(ANDROID_LOG_INFO, "Ngising", "fcinit");
@@ -270,13 +299,15 @@ TfLiteStatus EvalPie(TfLiteContext* context, TfLiteNode* node,
   //note: andoird log
   // __android_log_print(ANDROID_LOG_INFO, "Ngisin", "fcmatmul");
   // Compute output += weight * input
-  // tensor_utils::MatrixBatchVectorMultiplyAccumulate(
-  //     filter->data.f, num_units, input_size, input->data.f, batch_size,
-  //     output->data.f, /*result_stride=*/1);
-
-  tensor_utils::MatrixBatchVectorMultiplyAccumulateOpenCL(
+  tensor_utils::MatrixBatchVectorMultiplyAccumulate(
       filter->data.f, num_units, input_size, input->data.f, batch_size,
-      output->data.f, /*result_stride=*/1, context_cl_global, queue_global, program_global);
+      output->data.f, /*result_stride=*/1);
+
+  // tensor_utils::MatrixBatchVectorMultiplyAccumulateOpenCL(
+  //     filter->data.f, num_units, input_size, input->data.f, batch_size,
+  //     output->data.f, /*result_stride=*/1, context_cl_global, queue_global, program_global,
+  //     device_global, pipelineConv_global, pipelineMatmul_global, pipelineLayoutConv_global, 
+  //       pipelineLayoutMatmul_global, descriptorSetLayoutConv_global, descriptorSetLayoutMatmul_global, queueV_global, queueFamilyIndex_global);
 
   // Apply activation function
   tensor_utils::ApplyActivationToVector(output->data.f, batch_size * num_units,

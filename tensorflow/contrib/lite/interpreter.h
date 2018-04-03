@@ -32,6 +32,13 @@ limitations under the License.
 //note: android opencl
 #include "CL/cl.h"
 
+//note: vulkan
+#include "vulkan/vulkan.h"
+#include "vulkan/vk_platform.h"
+
+//note: shaderc
+#include "shaderc/shaderc.hpp"
+
 namespace tflite {
 
 // Map statically from a c++ type to a TfLiteType (used below for safe casts).
@@ -130,6 +137,8 @@ class Interpreter {
                                      size_t init_data_size, void* builtin_data,
                                      const TfLiteRegistration* registration,
                                      cl_context context_cl, cl_command_queue queue, cl_program program,
+                                     VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, 
+    VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex,
                                      int* node_index = nullptr);
 
   // Adds `tensors_to_add` tensors, preserving pre-existing Tensor entries.
@@ -268,7 +277,9 @@ class Interpreter {
 
   void* OpInitOpenCL(const TfLiteRegistration& op_reg, const char* buffer,
                size_t length,
-               cl_context context_cl, cl_command_queue queue, cl_program program) {
+               cl_context context_cl, cl_command_queue queue, cl_program program,
+               VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, 
+    VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex) {
     // //note: andoird log
     // __android_log_print(ANDROID_LOG_INFO, "Ngising", "opinit");
     if (op_reg.initopencl == nullptr) {
@@ -276,7 +287,9 @@ class Interpreter {
       return nullptr;
     }
     __android_log_print(ANDROID_LOG_INFO, "Ngising", "masuk initopencl");
-    return op_reg.initopencl(&context_, buffer, length, context_cl, queue, program);
+    return op_reg.initopencl(&context_, buffer, length, context_cl, queue, program,
+      device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, 
+               descriptorSetLayoutConv, descriptorSetLayoutMatmul, queueV, queueFamilyIndex);
   }
 
   // Let 'op_reg' release any memory it might have allocated via 'OpInit'.

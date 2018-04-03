@@ -28,6 +28,13 @@ limitations under the License.
 //note: android opencl
 #include "CL/cl.h"
 
+//note: vulkan
+#include "vulkan/vulkan.h"
+#include "vulkan/vk_platform.h"
+
+//note: shaderc
+#include "shaderc/shaderc.hpp"
+
 namespace {
 
 // std::vector preallocation tuning.
@@ -223,6 +230,8 @@ TfLiteStatus Interpreter::AddNodeWithParametersOpenCL(
     const char* init_data, size_t init_data_size, void* builtin_data,
     const TfLiteRegistration* registration,
     cl_context context_cl, cl_command_queue queue, cl_program program, 
+    VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, 
+    VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex,
     int* node_index) {
   invokable_ = false;
 
@@ -251,12 +260,16 @@ TfLiteStatus Interpreter::AddNodeWithParametersOpenCL(
   node.temporaries = TfLiteIntArrayCreate(0);
   __android_log_print(ANDROID_LOG_INFO, "Ngising", "masuk interpreter");
   if (init_data) {
-    node.user_data = OpInitOpenCL(*registration, init_data, init_data_size, context_cl, queue, program);
+    node.user_data = OpInitOpenCL(*registration, init_data, init_data_size, context_cl, queue, program,
+      device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, descriptorSetLayoutConv, 
+      descriptorSetLayoutMatmul, queueV, queueFamilyIndex);
   } else {
     node.user_data =
         OpInitOpenCL(*registration,
                reinterpret_cast<const char*>(builtin_data_deleter.get()), 0,
-               context_cl, queue, program);
+               context_cl, queue, program,
+               device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, 
+               descriptorSetLayoutConv, descriptorSetLayoutMatmul, queueV, queueFamilyIndex);
   }
   node.builtin_data = builtin_data_deleter.release();
   node_and_reg.second = *registration;

@@ -21,6 +21,13 @@ limitations under the License.
 //note: android opencl
 #include "../CL/cl.h"
 
+//note: vulkan
+#include "vulkan/vulkan.h"
+#include "vulkan/vk_platform.h"
+
+//note: shaderc
+#include "shaderc/shaderc.hpp"
+
 #ifndef USE_NEON
 #if defined(__ARM_NEON__) || defined(__ARM_NEON)
 #define USE_NEON
@@ -49,12 +56,16 @@ void PortableMatrixBatchVectorMultiplyAccumulateOpenCL(const float* matrix,
                                                  const float* vector,
                                                  int n_batch, float* result,
                                                  int result_stride,
-                                                 cl_context context_cl, cl_command_queue queue, cl_program program);
+                                                 cl_context context_cl, cl_command_queue queue, cl_program program,
+                                                 VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, 
+    VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex);
 void NeonMatrixBatchVectorMultiplyAccumulateOpenCL(const float* matrix, int m_rows,
                                              int m_cols, const float* vector,
                                              int n_batch, float* result,
                                              int result_stride,
-                                             cl_context context_cl, cl_command_queue queue, cl_program program);
+                                             cl_context context_cl, cl_command_queue queue, cl_program program,
+                                             VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, 
+    VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex);
 
 // Cwise product of two vectors.
 void PortableVectorVectorCwiseProduct(const float* vector1,

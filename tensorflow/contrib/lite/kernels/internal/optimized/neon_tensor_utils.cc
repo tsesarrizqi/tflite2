@@ -28,7 +28,7 @@ limitations under the License.
 #include <vector>
 
 //note: shaderc
-#include <shaderc/shaderc.hpp>
+#include "shaderc/shaderc.hpp"
 
 //note: android log
 #include <android/log.h> 
@@ -927,32 +927,6 @@ public:
         descriptorSetLayoutBinding.descriptorCount = 1;
         descriptorSetLayoutBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
-        // VkDescriptorSetLayoutBinding descriptorSetLayoutBindings[4];
-
-        // descriptorSetLayoutBindings[0] = {};
-        // descriptorSetLayoutBindings[0].binding = 0; // binding = 0
-        // descriptorSetLayoutBindings[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        // descriptorSetLayoutBindings[0].descriptorCount = 1;
-        // descriptorSetLayoutBindings[0].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-
-        // descriptorSetLayoutBindings[1] = {};
-        // descriptorSetLayoutBindings[1].binding = 1; // binding = 1
-        // descriptorSetLayoutBindings[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        // descriptorSetLayoutBindings[1].descriptorCount = 1;
-        // descriptorSetLayoutBindings[1].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-
-        // descriptorSetLayoutBindings[2] = {};
-        // descriptorSetLayoutBindings[2].binding = 2; // binding = 3
-        // descriptorSetLayoutBindings[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        // descriptorSetLayoutBindings[2].descriptorCount = 1;
-        // descriptorSetLayoutBindings[2].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-
-        // descriptorSetLayoutBindings[3] = {};
-        // descriptorSetLayoutBindings[3].binding = 3; // binding = 2
-        // descriptorSetLayoutBindings[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        // descriptorSetLayoutBindings[3].descriptorCount = 1;
-        // descriptorSetLayoutBindings[3].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-
         VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {};
         descriptorSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
         descriptorSetLayoutCreateInfo.bindingCount = 1; // only a single binding in this descriptor set layout. 
@@ -1070,40 +1044,6 @@ public:
     }
 
     void createComputePipeline() {
-        VkPhysicalDeviceProperties devprops;
-        vkGetPhysicalDeviceProperties(physicalDevice, &devprops);
-        __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxComputeSharedMemorySize: %d", devprops.limits.maxComputeSharedMemorySize);
-        __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxComputeWorkGroupCount[3]: %d %d %d", devprops.limits.maxComputeWorkGroupCount[0], devprops.limits.maxComputeWorkGroupCount[1], devprops.limits.maxComputeWorkGroupCount[2]);
-        __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxComputeWorkGroupInvocations: %d", devprops.limits.maxComputeWorkGroupInvocations);
-        __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxComputeWorkGroupSize[3]: %d %d %d", devprops.limits.maxComputeWorkGroupSize[0], devprops.limits.maxComputeWorkGroupSize[1], devprops.limits.maxComputeWorkGroupSize[2]);
-        __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxDescriptorSetStorageBuffers: %d", devprops.limits.maxDescriptorSetStorageBuffers);
-        __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxPerStageDescriptorStorageBuffers: %d", devprops.limits.maxPerStageDescriptorStorageBuffers);
-        __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxPerStageResources: %d", devprops.limits.maxPerStageResources);
-        __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxStorageBufferRange: %d", devprops.limits.maxStorageBufferRange);
-
-        // set = 0
-        // std::string source =
-        //   "#version 450 \n" \
-        //   "#extension GL_ARB_separate_shader_objects : enable \n" \
-        //   "layout(local_size_x = 8, local_size_y = 1, local_size_z = 1) in; \n" \
-        //   "layout(binding = 0) buffer matrixA { \n" \
-        //   "    float A[]; \n" \
-        //   "}; \n" \
-        //   "layout(binding = 1) buffer matrixB { \n" \
-        //   "    float B[]; \n" \
-        //   "}; \n" \
-        //   "layout (binding = 2) buffer matrixSizes { \n" \
-        //   "    int S[]; \n" \
-        //   "}; \n" \
-        //   "layout(binding = 3) buffer matrixC { \n" \
-        //   "    float C[]; \n" \
-        //   "}; \n" \
-        //   "void main() { \n" \
-        //   "    int row = int(gl_GlobalInvocationID.x);"
-        //   "    if (row < 1008) { \n" \
-        //   "        C[row] = 1.0; \n" \
-        //   "    } \n" \
-        //   "}";
         std::string source =
           "#version 450 \n" \
           "#extension GL_ARB_separate_shader_objects : enable \n" \
@@ -1131,8 +1071,6 @@ public:
 
         shaderc::Compiler compiler;
         shaderc::CompileOptions options;
-
-        // // options.AddMacroDefinition("MY_DEFINE", "1");
 
         shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(
           source.c_str(), source.size(), shaderc_glsl_compute_shader, "matmul.glsl", options);
@@ -2250,7 +2188,9 @@ void NeonMatrixBatchVectorMultiplyAccumulateOpenCL(const float* matrix, int m_ro
                                              int m_cols, const float* vector,
                                              int n_batch, float* result,
                                              int result_stride,
-                                             cl_context context_cl, cl_command_queue queue, cl_program program) {
+                                             cl_context context_cl, cl_command_queue queue, cl_program program,
+                                             VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, 
+    VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex) {
   
 
   // int* sizes;

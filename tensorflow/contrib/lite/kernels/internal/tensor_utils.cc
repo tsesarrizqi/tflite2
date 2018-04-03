@@ -17,6 +17,13 @@ limitations under the License.
 //note: android opencl
 #include "CL/cl.h"
 
+//note: vulkan
+#include "vulkan/vulkan.h"
+#include "vulkan/vk_platform.h"
+
+//note: shaderc
+#include "shaderc/shaderc.hpp"
+
 #ifndef USE_NEON
 #if defined(__ARM_NEON__) || defined(__ARM_NEON)
 #define USE_NEON

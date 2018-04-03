@@ -34,6 +34,14 @@ limitations under the License.
 //note: android opencl
 #include "CL/cl.h"
 
+//note: vulkan
+#include "vulkan/vulkan.h"
+#include "vulkan/vk_platform.h"
+
+//note: shaderc
+// #include "shaderc/shaderc.hpp"
+// include shader bermasalah
+
 #ifdef __cplusplus
 extern "C" {
 #endif  // __cplusplus
@@ -289,7 +297,9 @@ typedef struct {
   TfLiteStatus (*invoke)(TfLiteContext* context, TfLiteNode* node);
 
   void* (*initopencl)(TfLiteContext* context, const char* buffer, size_t length, 
-                        cl_context context_cl, cl_command_queue queue, cl_program program);
+                        cl_context context_cl, cl_command_queue queue, cl_program program,
+                        VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, 
+    VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex);
 
   // Builtin codes. If this kernel refers to a builtin this is the code
   // of the builtin. This is so we can do marshaling to other frameworks like

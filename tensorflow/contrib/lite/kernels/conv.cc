@@ -37,6 +37,13 @@ limitations under the License.
 #include <time.h>
 #include <sys/time.h>
 
+//note: vulkan
+#include "vulkan/vulkan.h"
+#include "vulkan/vk_platform.h"
+
+//note: shaderc
+#include "shaderc/shaderc.hpp"
+
 #define MEM_SIZE (128)
 
 #include "tensorflow/contrib/lite/builtin_op_data.h"
@@ -90,6 +97,16 @@ struct OpData {
 cl_context context_cl_global = NULL;       
 cl_command_queue queue_global = NULL;
 cl_program program_global = NULL;
+
+VkDevice device_global = NULL;
+VkPipeline pipelineConv_global = NULL;
+VkPipeline pipelineMatmul_global = NULL;
+VkPipelineLayout pipelineLayoutMatmul_global = NULL;
+VkPipelineLayout pipelineLayoutConv_global = NULL;
+VkDescriptorSetLayout descriptorSetLayoutMatmul_global = NULL;
+VkDescriptorSetLayout descriptorSetLayoutConv_global = NULL;
+VkQueue queueV_global = NULL; 
+uint32_t queueFamilyIndex_global = 0;
 
 // const char *kernelSource_conv =           "\n" \
 // "__kernel void conv(__global float* input_data,   \n" \
@@ -194,7 +211,9 @@ void* Init(TfLiteContext* context, const char* buffer, size_t length) {
 }
 
 void* InitOpenCL(TfLiteContext* context, const char* buffer, size_t length,
-  cl_context context_cl, cl_command_queue queue, cl_program program) {
+  cl_context context_cl, cl_command_queue queue, cl_program program,
+  VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, 
+    VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex) {
   // This is a builtin op, so we don't use the contents in 'buffer', if any.
   // Instead, we allocate a new object to use as scratch space for im2col, and
   // to carry information from Prepare() to Eval().
@@ -202,6 +221,16 @@ void* InitOpenCL(TfLiteContext* context, const char* buffer, size_t length,
   context_cl_global = context_cl;
   program_global = program;
   queue_global = queue;
+
+  device_global = device;
+  pipelineConv_global = pipelineConv;
+  pipelineMatmul_global = pipelineMatmul;
+  pipelineLayoutMatmul_global = pipelineLayoutMatmul;
+  pipelineLayoutConv_global = pipelineLayoutConv;
+  descriptorSetLayoutMatmul_global = descriptorSetLayoutMatmul;
+  descriptorSetLayoutConv_global = descriptorSetLayoutConv;
+  queueV_global = queueV; 
+  queueFamilyIndex_global = queueFamilyIndex;
 
   // //OpenCL init
   // cl_int err;
@@ -575,23 +604,25 @@ void EvalFloat(TfLiteContext* context, TfLiteNode* node,
     }
     //note: andoird log
     // // __android_log_print(ANDROID_LOG_INFO, "Convcc", "multithread conv");
-    multithreaded_ops::Conv(
-        GetTensorData<float>(input), GetTensorDims(input), filter_data,
-        GetTensorDims(filter), GetTensorData<float>(bias), GetTensorDims(bias),
-        params->stride_width, params->stride_height, data->padding.width,
-        data->padding.height, params->padding, output_activation_min,
-        output_activation_max, GetTensorData<float>(output),
-        GetTensorDims(output), GetTensorData<float>(im2col),
-        GetTensorDims(im2col));
-    // multithreaded_ops::ConvOpenCL(
+    // multithreaded_ops::Conv(
     //     GetTensorData<float>(input), GetTensorDims(input), filter_data,
     //     GetTensorDims(filter), GetTensorData<float>(bias), GetTensorDims(bias),
     //     params->stride_width, params->stride_height, data->padding.width,
     //     data->padding.height, params->padding, output_activation_min,
     //     output_activation_max, GetTensorData<float>(output),
     //     GetTensorDims(output), GetTensorData<float>(im2col),
-    //     GetTensorDims(im2col),
-    //     context_cl_global, queue_global, program_global);
+    //     GetTensorDims(im2col));
+    multithreaded_ops::ConvOpenCL(
+        GetTensorData<float>(input), GetTensorDims(input), filter_data,
+        GetTensorDims(filter), GetTensorData<float>(bias), GetTensorDims(bias),
+        params->stride_width, params->stride_height, data->padding.width,
+        data->padding.height, params->padding, output_activation_min,
+        output_activation_max, GetTensorData<float>(output),
+        GetTensorDims(output), GetTensorData<float>(im2col),
+        GetTensorDims(im2col),
+        context_cl_global, queue_global, program_global,
+        device_global, pipelineConv_global, pipelineMatmul_global, pipelineLayoutConv_global, 
+        pipelineLayoutMatmul_global, descriptorSetLayoutConv_global, descriptorSetLayoutMatmul_global, queueV_global, queueFamilyIndex_global);
     
   }
 }

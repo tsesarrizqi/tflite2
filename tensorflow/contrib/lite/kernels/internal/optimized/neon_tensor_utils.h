@@ -18,6 +18,13 @@ limitations under the License.
 //note: android opencl
 #include "../CL/cl.h"
 
+//note: vulkan
+#include "vulkan/vulkan.h"
+#include "vulkan/vk_platform.h"
+
+//note: shaderc
+#include "shaderc/shaderc.hpp"
+
 // TODO(ghodrat): Remove this header file and the dependency to internal data
 // structure.
 #include "tensorflow/contrib/lite/builtin_op_data.h"
@@ -40,9 +47,12 @@ void MatrixBatchVectorMultiplyAccumulateOpenCL(const float* matrix, int m_rows,
                                          int m_cols, const float* vector,
                                          int n_batch, float* result,
                                          int result_stride, 
-                                         cl_context context_cl, cl_command_queue queue, cl_program program) {
+                                         cl_context context_cl, cl_command_queue queue, cl_program program,
+                                         VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, 
+    VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex) {
   NEON_OR_PORTABLE(MatrixBatchVectorMultiplyAccumulateOpenCL, matrix, m_rows, m_cols,
-                   vector, n_batch, result, result_stride, context_cl, queue, program);
+                   vector, n_batch, result, result_stride, context_cl, queue, program,
+                   device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, descriptorSetLayoutConv, descriptorSetLayoutMatmul, queueV, queueFamilyIndex);
 }
 
 void VectorVectorCwiseProduct(const float* vector1, const float* vector2,

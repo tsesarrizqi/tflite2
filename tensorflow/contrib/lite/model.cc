@@ -31,51 +31,60 @@ limitations under the License.
 //note: android opencl
 #include "CL/cl.h"
 
+//note: vulkan
+#include "vulkan/vulkan.h"
+#include "vulkan/vk_platform.h"
+#include <vector>
+#include <string.h>
+#include <assert.h>
+#include <stdexcept>
+#include <cmath>
+
+//note: shaderc
+#include "shaderc/shaderc.hpp"
+
+//note: string
+#include <string>
+#include <iostream>
+
 //note: android log
 #include <android/log.h> 
 #include <stdio.h> 
 
+#define VK_CHECK_RESULT(f)                                        \
+{                                                   \
+    VkResult res = (f);                                         \
+    if (res != VK_SUCCESS)                                        \
+    {                                                 \
+        __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "Fatal : VkResult is %d in %s at line %d\n", res,  __FILE__, __LINE__); \
+        assert(res == VK_SUCCESS);                                    \
+    }                                                 \
+}
+
 const char *kernelSource =           "\n" \
 "#define TS 32      \n" \
 "#define WIDTH 4      \n" \
-"__kernel void conv(__constant float* input_data,   \n" \
-"          __constant float* filter_data,   \n" \
-"          __constant float* bias_data,   \n" \
+"__kernel void conv(__global float* input_data,   \n" \
+"          __global float* filter_data,   \n" \
+"          __global float* bias_data,   \n" \
 "          __global float* output_data,  \n" \
 "          int stride_width, int stride_height,   \n" \
 "          int pad_width, int pad_height,   \n" \
-"          __constant int* dim_sizes, __global int* dim_strides,  \n" \
+"          __global int* dim_sizes, __global int* dim_strides,  \n" \
 "          float output_activation_min, float output_activation_max) {  \n" \
-"  int gid0 = get_global_id(0);\n" \
-"  int gid1 = get_global_id(1);  \n" \
-"  const int batches = dim_sizes[3];  \n" \
-"  const int input_depth = dim_sizes[0];  \n" \
-"  const int output_depth = dim_sizes[7]; \n" \
-"  const int output_height = dim_sizes[14];  \n" \
-"  const int output_width = dim_sizes[13];   \n" \
-"  \n" \
-"  int batch = gid0/output_depth;  \n" \
-"  int out_channel = gid0%output_depth;\n" \
-"  int out_y = gid1/output_width;  \n" \
-"  int out_x = gid1%output_width;  \n" \
-"  \n" \
-"  if((gid0 < batches*output_depth) && (gid1 < output_height*output_width)) {  \n" \
-"    const int input_height = dim_sizes[2];  \n" \
-"    const int input_width = dim_sizes[1];  \n" \
-"    const int filter_height = dim_sizes[6];  \n" \
-"    const int filter_width = dim_sizes[5];  \n" \
-"    // for (int out_y = 0; out_y < output_height; ++out_y) {  \n" \
-"    //   for (int out_x = 0; out_x < output_width; ++out_x) {  \n" \
-"        const int in_x_origin = (out_x * stride_width) - pad_width;  \n" \
-"        const int in_y_origin = (out_y * stride_height) - pad_height;  \n" \
-"        float total = 0.f;  \n" \
-"        for (int filter_y = 0; filter_y < filter_height; ++filter_y) {  \n" \
-"          for (int filter_x = 0; filter_x < filter_width; ++filter_x) {  \n" \
-"            for (int in_channel = 0; in_channel < input_depth; ++in_channel) {  \n" \
-"              const int in_x = in_x_origin + filter_x;  \n" \
-"              const int in_y = in_y_origin + filter_y;  \n" \
-"              if ((in_x >= 0) && (in_x < input_width) && (in_y >= 0) &&  \n" \
-"                  (in_y < input_height)) {  \n" \
+"  int out_channel = get_global_id(0);\n" \
+"  int out_y = get_global_id(1);  \n" \
+"  int out_x = get_global_id(2);  \n" \
+"  if((out_channel < dim_sizes[7]) && (out_y < dim_sizes[14]) && (out_x < dim_sizes[13])) {  \n" \
+"      for (int batch = 0; batch < dim_sizes[3]; ++batch) { \n" \
+"        float total = 0.0; \n" \
+"        for (int filter_y = 0; filter_y < dim_sizes[6]; ++filter_y) {  \n" \
+"          for (int filter_x = 0; filter_x < dim_sizes[5]; ++filter_x) {  \n" \
+"            for (int in_channel = 0; in_channel < dim_sizes[0]; ++in_channel) {  \n" \
+"              int in_x = (out_x * stride_width) - pad_width + filter_x;  \n" \
+"              int in_y = (out_y * stride_height) - pad_height + filter_y;  \n" \
+"              if ((in_x >= 0) && (in_x < dim_sizes[1]) && (in_y >= 0) &&  \n" \
+"                  (in_y < dim_sizes[2])) {  \n" \
 "                float input_value = input_data[in_channel*dim_strides[0] + in_x*dim_strides[1] +   \n" \
 "                                                in_y*dim_strides[2] + batch*dim_strides[3]];  \n" \
 "                float filter_value =  \n" \
@@ -86,18 +95,13 @@ const char *kernelSource =           "\n" \
 "            }  \n" \
 "          }  \n" \
 "        }  \n" \
-"        float bias_value = 0.0f;  \n" \
+"        float bias_value = 0.0;  \n" \
 "        if (bias_data) {  \n" \
 "          bias_value = bias_data[out_channel*dim_strides[8]];  \n" \
 "        }  \n" \
-"        float max = total+bias_value; \n" \
-"        if(max < output_activation_min) max = output_activation_min; \n" \
-"        float min = max; \n" \
-"        if(min > output_activation_max) min = output_activation_max; \n" \
 "        output_data[out_channel*dim_strides[12] + out_x*dim_strides[13] +   \n" \
-"                     out_y*dim_strides[14] + batch*dim_strides[15]] = min; \n" \
-"    //   }  \n" \
-"    // }  \n" \
+"                     out_y*dim_strides[14] + batch*dim_strides[15]] = min(max(total + bias_value,output_activation_min),output_activation_max); \n" \
+"      }  \n" \
 "  }  \n" \
 "}\n" \
 "  \n" \
@@ -208,11 +212,31 @@ const char *kernelSource =           "\n" \
 "}  \n" \
 "\n";
 
+
+//OpenCL
 cl_platform_id cpPlatform = NULL;
 cl_device_id device_id = NULL;    
 cl_context context_cl = NULL;       
-cl_command_queue queue = NULL;
+cl_command_queue queueCL = NULL;
 cl_program program = NULL;
+
+//Vulkan
+VkInstance instance = NULL;
+VkPhysicalDevice physicalDevice = NULL;
+
+VkDevice device = NULL;
+VkPipeline pipelineConv = NULL;
+VkPipeline pipelineMatmul = NULL;
+VkPipelineLayout pipelineLayoutMatmul = NULL;
+VkPipelineLayout pipelineLayoutConv = NULL;
+VkShaderModule matmulShaderModule = NULL;
+VkShaderModule convShaderModule = NULL;
+VkDescriptorSetLayout descriptorSetLayoutMatmul = NULL;
+VkDescriptorSetLayout descriptorSetLayoutConv = NULL;
+VkQueue queue = NULL; 
+uint32_t queueFamilyIndex = 0;
+
+// device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, descriptorSetLayoutConv, descriptorSetLayoutMatmul, queue, queueFamilyIndex
 
 namespace tflite {
 
@@ -760,7 +784,7 @@ void initOpenCL() {
 
   context_cl = clCreateContext(0, 1, &device_id, NULL, NULL, &err);
 
-  queue = clCreateCommandQueue(context_cl, device_id, 0, &err);
+  queueCL = clCreateCommandQueue(context_cl, device_id, 0, &err);
 
   program = clCreateProgramWithSource(context_cl, 1,
                           (const char **) & kernelSource, NULL, &err);
@@ -813,9 +837,338 @@ void initOpenCL() {
     &maxWorkGroupSize3,
     NULL);
   //note: andoird log
-  __android_log_print(ANDROID_LOG_INFO, "Ngising", "MAX Workgroup transpose: %d",maxWorkGroupSize1);
-  __android_log_print(ANDROID_LOG_INFO, "Ngising", "MAX Workgroup conv: %d",maxWorkGroupSize2);
-  __android_log_print(ANDROID_LOG_INFO, "Ngising", "MAX Workgroup matrixVectorMul: %d",maxWorkGroupSize3);
+  // __android_log_print(ANDROID_LOG_INFO, "Ngising", "MAX Workgroup transpose: %d",maxWorkGroupSize1);
+  // __android_log_print(ANDROID_LOG_INFO, "Ngising", "MAX Workgroup conv: %d",maxWorkGroupSize2);
+  // __android_log_print(ANDROID_LOG_INFO, "Ngising", "MAX Workgroup matrixVectorMul: %d",maxWorkGroupSize3);
+}
+
+void createInstance() {
+    VkApplicationInfo applicationInfo = {};
+    applicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+    applicationInfo.pApplicationName = "VulkanDeepLearning";
+    applicationInfo.applicationVersion = 0;
+    applicationInfo.pEngineName = "Vulkan";
+    applicationInfo.engineVersion = 0;
+    applicationInfo.apiVersion = VK_MAKE_VERSION(1, 0, 31);
+    
+    VkInstanceCreateInfo createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    createInfo.flags = 0;
+    createInfo.pApplicationInfo = &applicationInfo;
+
+    VK_CHECK_RESULT(vkCreateInstance(
+        &createInfo,
+        NULL,
+        &instance));
+}
+
+void findPhysicalDevice() {
+    uint32_t deviceCount;
+    vkEnumeratePhysicalDevices(instance, &deviceCount, NULL);
+    if (deviceCount == 0) {
+        throw std::runtime_error("could not find a device with vulkan support");
+    }
+
+    std::vector<VkPhysicalDevice> devices(deviceCount);
+    vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
+
+    for (VkPhysicalDevice device : devices) {
+        if (true) { // As above stated, we do no feature checks, so just accept.
+            physicalDevice = device;
+            break;
+        }
+    }
+}
+
+uint32_t getComputeQueueFamilyIndex() {
+    uint32_t queueFamilyCount;
+
+    vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, NULL);
+
+    std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+    vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilies.data());
+
+    uint32_t i = 0;
+    for (; i < queueFamilies.size(); ++i) {
+        VkQueueFamilyProperties props = queueFamilies[i];
+
+        if (props.queueCount > 0 && (props.queueFlags & VK_QUEUE_COMPUTE_BIT)) {
+            break;
+        }
+    }
+
+    if (i == queueFamilies.size()) {
+        throw std::runtime_error("could not find a queue family that supports operations");
+    }
+
+    return i;
+}
+
+void createDevice() {
+    VkDeviceQueueCreateInfo queueCreateInfo = {};
+    queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    queueFamilyIndex = getComputeQueueFamilyIndex(); // find queue family with compute capability.
+    queueCreateInfo.queueFamilyIndex = queueFamilyIndex;
+    queueCreateInfo.queueCount = 1; // create one queue in this family. We don't need more.
+    float queuePriorities = 1.0;  // we only have one queue, so this is not that imporant. 
+    queueCreateInfo.pQueuePriorities = &queuePriorities;
+
+    VkDeviceCreateInfo deviceCreateInfo = {};
+
+    VkPhysicalDeviceFeatures deviceFeatures = {};
+
+    deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    deviceCreateInfo.pQueueCreateInfos = &queueCreateInfo; // when creating the logical device, we also specify what queues it has.
+    deviceCreateInfo.queueCreateInfoCount = 1;
+    deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
+
+    VK_CHECK_RESULT(vkCreateDevice(physicalDevice, &deviceCreateInfo, NULL, &device)); // create logical device.
+
+    vkGetDeviceQueue(device, queueFamilyIndex, 0, &queue);
+}
+
+uint32_t findMemoryType(VkDeviceSize memorySize, VkMemoryPropertyFlags properties) {
+    VkPhysicalDeviceMemoryProperties memoryProperties;
+
+    vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
+
+    for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; ++i) {
+        if ((memorySize < memoryProperties.memoryHeaps[memoryProperties.memoryTypes[i].heapIndex].size) &&
+            ((memoryProperties.memoryTypes[i].propertyFlags & properties) == properties))
+            return i;
+    }
+    return -1;
+}
+
+void createDescriptorSetLayoutMatmul() {
+    VkDescriptorSetLayoutBinding descriptorSetLayoutBinding;
+
+    descriptorSetLayoutBinding = {};
+    descriptorSetLayoutBinding.binding = 0; // binding = 0
+    descriptorSetLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    descriptorSetLayoutBinding.descriptorCount = 1;
+    descriptorSetLayoutBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+    VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {};
+    descriptorSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    descriptorSetLayoutCreateInfo.bindingCount = 1; // only a single binding in this descriptor set layout. 
+    descriptorSetLayoutCreateInfo.pBindings = &descriptorSetLayoutBinding; 
+
+    VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCreateInfo, NULL, &descriptorSetLayoutMatmul));
+}
+
+void createDescriptorSetLayoutConv() {
+    VkDescriptorSetLayoutBinding descriptorSetLayoutBindings[4];
+
+    descriptorSetLayoutBindings[0] = {};
+    descriptorSetLayoutBindings[0].binding = 0; // binding = 0
+    descriptorSetLayoutBindings[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    descriptorSetLayoutBindings[0].descriptorCount = 1;
+    descriptorSetLayoutBindings[0].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+    descriptorSetLayoutBindings[1] = {};
+    descriptorSetLayoutBindings[1].binding = 1; // binding = 1
+    descriptorSetLayoutBindings[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    descriptorSetLayoutBindings[1].descriptorCount = 1;
+    descriptorSetLayoutBindings[1].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+    VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {};
+    descriptorSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    descriptorSetLayoutCreateInfo.bindingCount = 2; // only a single binding in this descriptor set layout. 
+    descriptorSetLayoutCreateInfo.pBindings = descriptorSetLayoutBindings; 
+
+    VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCreateInfo, NULL, &descriptorSetLayoutConv));
+}
+
+void createConvPipeline() {
+    std::string source =
+    "#version 450 \n" \
+    "#extension GL_ARB_separate_shader_objects : enable \n" \
+    "layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in; \n" \
+    "layout(binding = 0) buffer floatBuffer { \n" \
+    "    float convFloatB[]; \n" \
+    "}; \n" \
+    "layout(binding = 1) readonly buffer intBuffer { \n" \
+    "    int convIntB[]; \n" \
+    "}; \n" \
+    "void main() { \n" \
+    "  int out_channel = int(gl_GlobalInvocationID.x); \n" \
+    "  int out_y = int(gl_GlobalInvocationID.y); \n" \
+    "  int out_x = int(gl_GlobalInvocationID.z); \n" \
+    "  if((out_channel < convIntB[11]) && (out_x < convIntB[17]) && (out_y < convIntB[18])) { \n" \
+    "      for (int batch = 0; batch < convIntB[7]; ++batch) { \n" \
+    "        float total = 0.0; \n" \
+    "        for (int filter_y = 0; filter_y < convIntB[10]; ++filter_y) { \n" \
+    "          for (int filter_x = 0; filter_x < convIntB[9]; ++filter_x) { \n" \
+    "            for (int in_channel = 0; in_channel < convIntB[4]; ++in_channel) { \n" \
+    "              int in_x = (out_x * convIntB[0] - convIntB[2]) + filter_x; \n" \
+    "              int in_y = (out_y * convIntB[1] - convIntB[3]) + filter_y; \n" \
+    "              if ((in_x >= 0) && (in_x < convIntB[5]) && (in_y >= 0) && \n" \
+    "                  (in_y < convIntB[6])) { \n" \
+    "                total += (convFloatB[2 + in_channel*convIntB[20] + in_x*convIntB[21] +in_y*convIntB[22] + batch*convIntB[23]] *  \n" \
+    "                        convFloatB[convIntB[36] + 2 + in_channel*convIntB[24] + filter_x*convIntB[25] + filter_y*convIntB[26] + out_channel*convIntB[27]]); \n" \
+    "              } \n" \
+    "            } \n" \
+    "          } \n" \
+    "        } \n" \
+    "        float bias_value = 0.0; \n" \
+    "        if (convIntB[38] > 0) { \n" \
+    "          bias_value = convFloatB[convIntB[36] + 2 + convIntB[37]+(out_channel*convIntB[28])]; \n" \
+    "        } \n" \
+    "        convFloatB[2 + convIntB[36] + convIntB[37] + convIntB[38] + out_channel*convIntB[32] + out_x*convIntB[33] + out_y*convIntB[34] + batch*convIntB[35]] = min(max(total + bias_value,convFloatB[0]),convFloatB[1]); \n" \
+    "      } \n" \
+    "  } \n" \
+    "}";
+
+    shaderc::Compiler compiler;
+    shaderc::CompileOptions options;
+
+    shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(
+      source.c_str(), source.size(), shaderc_glsl_compute_shader, "conv.glsl", options);
+
+    if (module.GetCompilationStatus() !=
+        shaderc_compilation_status_success) {
+    }
+
+    std::vector<uint32_t> code(module.cbegin(), module.cend());
+
+    VkShaderModuleCreateInfo createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    createInfo.pCode = code.data();
+    createInfo.codeSize = sizeof(uint32_t)*code.size();
+
+    VK_CHECK_RESULT(vkCreateShaderModule(device, &createInfo, NULL, &convShaderModule));
+
+    VkPipelineShaderStageCreateInfo shaderStageCreateInfo = {};
+    shaderStageCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    shaderStageCreateInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+    shaderStageCreateInfo.module = convShaderModule;
+    shaderStageCreateInfo.pName = "main";
+
+    VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {};
+    pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutCreateInfo.setLayoutCount = 1;
+    pipelineLayoutCreateInfo.pSetLayouts = &descriptorSetLayoutConv; 
+    
+    VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, NULL, &pipelineLayoutConv));
+
+    VkComputePipelineCreateInfo pipelineCreateInfo = {};
+    pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    pipelineCreateInfo.stage = shaderStageCreateInfo;
+    pipelineCreateInfo.layout = pipelineLayoutConv;
+
+    VK_CHECK_RESULT(vkCreateComputePipelines(
+        device, VK_NULL_HANDLE,
+        1, &pipelineCreateInfo,
+        NULL, &pipelineConv));
+}
+
+void createMatmulPipeline() {
+    std::string source =
+      "#version 450 \n" \
+      "#extension GL_ARB_separate_shader_objects : enable \n" \
+      "layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in; \n" \
+      "layout(binding = 0) buffer matrixA { \n" \
+      "    vec4 aA[]; \n" \
+      "}; \n" \
+      "void main() { \n" \
+      "    int row = int(gl_GlobalInvocationID.x)*4; \n" \
+      "    vec4 mk = aA[0];  \n" \
+      "    int mM = int(mk.x);  \n" \
+      "    int kK = int(mk.y);  \n" \
+      "    if (row < mM) { \n" \
+      "        vec4 sum = {0.0, 0.0, 0.0, 0.0}; \n" \
+      "        for(int i = 1; i <= kK/4; i++){ \n" \
+      "            vec4 currb = aA[(mM*kK/4) + i];\n" \
+      "            sum.x += dot(aA[(row*kK/4) + i],currb);\n" \
+      "            sum.y += dot(aA[((row+1)*kK/4) + i],currb); \n" \
+      "            sum.z += dot(aA[((row+2)*kK/4) + i],currb);\n" \
+      "            sum.w += dot(aA[((row+3)*kK/4) + i],currb);\n" \
+      "        } \n" \
+      "        aA[1 + (mM*kK/4) + (kK/4) + (row/4)] = sum; \n" \
+      "    } \n" \
+      "}";
+
+    shaderc::Compiler compiler;
+    shaderc::CompileOptions options;
+
+    shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(
+      source.c_str(), source.size(), shaderc_glsl_compute_shader, "matmul.glsl", options);
+
+    if (module.GetCompilationStatus() !=
+        shaderc_compilation_status_success) {
+    }
+
+    std::vector<uint32_t> code(module.cbegin(), module.cend());
+
+    VkShaderModuleCreateInfo createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    createInfo.pCode = code.data();
+    createInfo.codeSize = sizeof(uint32_t)*code.size();
+    
+    VK_CHECK_RESULT(vkCreateShaderModule(device, &createInfo, NULL, &matmulShaderModule));
+
+    VkPipelineShaderStageCreateInfo shaderStageCreateInfo = {};
+    shaderStageCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    shaderStageCreateInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+    shaderStageCreateInfo.module = matmulShaderModule;
+    shaderStageCreateInfo.pName = "main";
+
+    VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {};
+    pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutCreateInfo.setLayoutCount = 1;
+    pipelineLayoutCreateInfo.pSetLayouts = &descriptorSetLayoutMatmul; 
+    
+    VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, NULL, &pipelineLayoutMatmul));
+
+    VkComputePipelineCreateInfo pipelineCreateInfo = {};
+    pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    pipelineCreateInfo.stage = shaderStageCreateInfo;
+    pipelineCreateInfo.layout = pipelineLayoutMatmul;
+
+    VK_CHECK_RESULT(vkCreateComputePipelines(
+        device, VK_NULL_HANDLE,
+        1, &pipelineCreateInfo,
+        NULL, &pipelineMatmul));
+}
+
+// void createCommandBuffer() {
+//     VkCommandPoolCreateInfo commandPoolCreateInfo = {};
+//     commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+//     commandPoolCreateInfo.flags = 0;
+//     commandPoolCreateInfo.queueFamilyIndex = queueFamilyIndex;
+//     VK_CHECK_RESULT(vkCreateCommandPool(device, &commandPoolCreateInfo, NULL, &commandPool));
+
+//     VkCommandBufferAllocateInfo commandBufferAllocateInfo = {};
+//     commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+//     commandBufferAllocateInfo.commandPool = commandPool;
+
+//     commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+//     commandBufferAllocateInfo.commandBufferCount = 1; // allocate a single command buffer. 
+//     VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, &commandBuffer)); // allocate command buffer.
+
+//     // VkCommandBufferBeginInfo beginInfo = {};
+//     // beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+//     // beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT; // the buffer is only submitted and used once in this application.
+//     // VK_CHECK_RESULT(vkBeginCommandBuffer(commandBuffer, &beginInfo)); // start recording commands.
+
+//     // vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
+//     // vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, &descriptorSet, 0, NULL);
+
+//     // int output_depth = dimSizes[7];
+//     // int output_height = dimSizes[14];  
+//     // int output_width = dimSizes[13];
+//     // vkCmdDispatch(commandBuffer, (output_depth-1)/8+1, (output_height-1)/8+1, (output_width-1)/8+1);
+
+//     // VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffer)); // end recording commands.
+// }
+
+void initVulkan() {
+    createInstance();
+    findPhysicalDevice();
+    createDevice();
+    createMatmulPipeline();
+    createConvPipeline();
 }
 
 TfLiteStatus InterpreterBuilder::ParseNodes(
@@ -861,7 +1214,9 @@ TfLiteStatus InterpreterBuilder::ParseNodes(
             FlatBufferIntArrayToVector(op->outputs()),
             reinterpret_cast<const char*>(op->custom_options()->data()),
             op->custom_options()->size(), nullptr, reg,
-            context_cl, queue, program);
+            context_cl, queueCL, program,
+            device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, 
+            descriptorSetLayoutConv, descriptorSetLayoutMatmul, queue, queueFamilyIndex);
       } else {
         //note: andoird log
         // __android_log_print(ANDROID_LOG_INFO, "Ngising", "addnodewithparam2");
@@ -869,7 +1224,9 @@ TfLiteStatus InterpreterBuilder::ParseNodes(
             FlatBufferIntArrayToVector(op->inputs()),
             FlatBufferIntArrayToVector(op->outputs()), nullptr, 0,
             ParseOpData(op, op_type, error_reporter_), reg,
-            context_cl, queue, program);
+            context_cl, queueCL, program, 
+            device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, 
+            descriptorSetLayoutConv, descriptorSetLayoutMatmul, queue, queueFamilyIndex);
       }
     }
     else {
