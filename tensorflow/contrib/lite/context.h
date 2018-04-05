@@ -36,7 +36,7 @@ limitations under the License.
 
 //note: vulkan
 #include "vulkan/vulkan.h"
-#include "vulkan/vk_platform.h"
+// #include "vulkan/vk_platform.h"
 
 //note: shaderc
 // #include "shaderc/shaderc.hpp"
@@ -298,7 +298,7 @@ typedef struct {
 
   void* (*initopencl)(TfLiteContext* context, const char* buffer, size_t length, 
                         cl_context context_cl, cl_command_queue queue, cl_program program,
-                        VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, 
+                        VkPhysicalDevice physicalDevice, VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, 
     VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex);
 
   // Builtin codes. If this kernel refers to a builtin this is the code

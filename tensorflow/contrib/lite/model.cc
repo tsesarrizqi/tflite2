@@ -220,22 +220,6 @@ cl_context context_cl = NULL;
 cl_command_queue queueCL = NULL;
 cl_program program = NULL;
 
-//Vulkan
-VkInstance instance = NULL;
-VkPhysicalDevice physicalDevice = NULL;
-
-VkDevice device = NULL;
-VkPipeline pipelineConv = NULL;
-VkPipeline pipelineMatmul = NULL;
-VkPipelineLayout pipelineLayoutMatmul = NULL;
-VkPipelineLayout pipelineLayoutConv = NULL;
-VkShaderModule matmulShaderModule = NULL;
-VkShaderModule convShaderModule = NULL;
-VkDescriptorSetLayout descriptorSetLayoutMatmul = NULL;
-VkDescriptorSetLayout descriptorSetLayoutConv = NULL;
-VkQueue queue = NULL; 
-uint32_t queueFamilyIndex = 0;
-
 // device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, descriptorSetLayoutConv, descriptorSetLayoutMatmul, queue, queueFamilyIndex
 
 namespace tflite {
@@ -842,12 +826,28 @@ void initOpenCL() {
   // __android_log_print(ANDROID_LOG_INFO, "Ngising", "MAX Workgroup matrixVectorMul: %d",maxWorkGroupSize3);
 }
 
+//Vulkan
+VkInstance instance;
+VkPhysicalDevice physicalDevice;
+
+VkDevice device;
+VkPipeline pipelineConv;
+VkPipeline pipelineMatmul;
+VkPipelineLayout pipelineLayoutMatmul;
+VkPipelineLayout pipelineLayoutConv;
+VkShaderModule matmulShaderModule;
+VkShaderModule convShaderModule;
+VkDescriptorSetLayout descriptorSetLayoutMatmul;
+VkDescriptorSetLayout descriptorSetLayoutConv;
+VkQueue queue; 
+uint32_t queueFamilyIndex = 0;
+
 void createInstance() {
     VkApplicationInfo applicationInfo = {};
     applicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     applicationInfo.pApplicationName = "VulkanDeepLearning";
     applicationInfo.applicationVersion = 0;
-    applicationInfo.pEngineName = "Vulkan";
+    applicationInfo.pEngineName = "Naive";
     applicationInfo.engineVersion = 0;
     applicationInfo.apiVersion = VK_MAKE_VERSION(1, 0, 31);
     
@@ -1165,10 +1165,19 @@ void createMatmulPipeline() {
 
 void initVulkan() {
     createInstance();
+    __android_log_print(ANDROID_LOG_INFO, "VulkanInit", "createInstance");
     findPhysicalDevice();
+    __android_log_print(ANDROID_LOG_INFO, "VulkanInit", "findPhysicalDevice");
     createDevice();
+    __android_log_print(ANDROID_LOG_INFO, "VulkanInit", "createDevice");
+    createDescriptorSetLayoutMatmul();
+    __android_log_print(ANDROID_LOG_INFO, "VulkanInit", "createDescriptorSetLayoutMatmul");
+    createDescriptorSetLayoutConv();
+    __android_log_print(ANDROID_LOG_INFO, "VulkanInit", "createDescriptorSetLayoutConv");
     createMatmulPipeline();
+    __android_log_print(ANDROID_LOG_INFO, "VulkanInit", "createMatmulPipeline");
     createConvPipeline();
+    __android_log_print(ANDROID_LOG_INFO, "VulkanInit", "createConvPipeline");
 }
 
 TfLiteStatus InterpreterBuilder::ParseNodes(
@@ -1177,7 +1186,8 @@ TfLiteStatus InterpreterBuilder::ParseNodes(
   TfLiteStatus status = kTfLiteOk;
   //note: andoird log
   // __android_log_print(ANDROID_LOG_INFO, "Ngising", "addnodewithparam");
-  // initOpenCL();
+  initOpenCL();
+  // initVulkan();
   for (int i = 0; i < operators->Length(); ++i) {
     const auto* op = operators->Get(i);
     int index = op->opcode_index();
@@ -1215,7 +1225,7 @@ TfLiteStatus InterpreterBuilder::ParseNodes(
             reinterpret_cast<const char*>(op->custom_options()->data()),
             op->custom_options()->size(), nullptr, reg,
             context_cl, queueCL, program,
-            device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, 
+            physicalDevice, device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, 
             descriptorSetLayoutConv, descriptorSetLayoutMatmul, queue, queueFamilyIndex);
       } else {
         //note: andoird log
@@ -1225,7 +1235,7 @@ TfLiteStatus InterpreterBuilder::ParseNodes(
             FlatBufferIntArrayToVector(op->outputs()), nullptr, 0,
             ParseOpData(op, op_type, error_reporter_), reg,
             context_cl, queueCL, program, 
-            device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, 
+            physicalDevice, device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, 
             descriptorSetLayoutConv, descriptorSetLayoutMatmul, queue, queueFamilyIndex);
       }
     }

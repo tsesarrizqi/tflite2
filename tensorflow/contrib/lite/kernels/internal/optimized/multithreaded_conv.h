@@ -56,7 +56,7 @@ limitations under the License.
 #include <vector>
 
 //note: shaderc
-#include "shaderc/shaderc.hpp"
+// #include "shaderc/shaderc.hpp"
 
 // note: timer
 #include <time.h>
@@ -339,8 +339,18 @@ public:
           int stride_width, int stride_height, 
           int pad_width, int pad_height, 
           const int* dim_sizes, const int* dim_strides,
-          float output_activation_min, float output_activation_max) {
+          float output_activation_min, float output_activation_max,
+          VkPhysicalDevice physicalDevice0, VkDevice device0, VkPipeline pipelineConv0, VkPipelineLayout pipelineLayoutConv0, 
+    VkDescriptorSetLayout descriptorSetLayoutConv0, VkQueue queueV0, uint32_t queueFamilyIndex0) {
         
+        physicalDevice = physicalDevice0; 
+        device = device0;
+        pipeline = pipelineConv0;
+        pipelineLayout = pipelineLayoutConv0;
+        descriptorSetLayout = descriptorSetLayoutConv0;
+        queue = queueV0;
+        queueFamilyIndex = queueFamilyIndex0;
+
         matrixASize = (uint32_t) (sizeof(float) *dim_sizes[0]*dim_sizes[1]*dim_sizes[2]*dim_sizes[3]);
         matrixBSize = (uint32_t) (sizeof(float) *((dim_sizes[4]*dim_sizes[5]*dim_sizes[6]*dim_sizes[7]) +
             (dim_sizes[8]*dim_sizes[9]*dim_sizes[10]*dim_sizes[11]) + 2));
@@ -365,34 +375,34 @@ public:
         outputActivationMin = output_activation_min;
         outputActivationMax = output_activation_max;
 
-        // Start Timers
+        // // Start Timers
         double wall0 = get_wall_time();
         double cpu0  = get_cpu_time();
-        createInstance();
-        // Stop timers
+        // createInstance();
+        // // Stop timers
         double wall1 = get_wall_time();
         double cpu1  = get_cpu_time();
         double wall = wall1 - wall0;
         double cpu = cpu1 - cpu0;
-        __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createInstance: %lf", wall);
+        // __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createInstance: %lf", wall);
         
-        wall0 = get_wall_time();
-        cpu0  = get_cpu_time();
-        findPhysicalDevice();
-        wall1 = get_wall_time();
-        cpu1  = get_cpu_time();
-        wall = wall1 - wall0;
-        cpu = cpu1 - cpu0;
-        __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "findPhysicalDevice: %lf", wall);
+        // wall0 = get_wall_time();
+        // cpu0  = get_cpu_time();
+        // findPhysicalDevice();
+        // wall1 = get_wall_time();
+        // cpu1  = get_cpu_time();
+        // wall = wall1 - wall0;
+        // cpu = cpu1 - cpu0;
+        // __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "findPhysicalDevice: %lf", wall);
         
-        wall0 = get_wall_time();
-        cpu0  = get_cpu_time();
-        createDevice();
-        wall1 = get_wall_time();
-        cpu1  = get_cpu_time();
-        wall = wall1 - wall0;
-        cpu = cpu1 - cpu0;
-        __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createDevice: %lf", wall);
+        // wall0 = get_wall_time();
+        // cpu0  = get_cpu_time();
+        // createDevice();
+        // wall1 = get_wall_time();
+        // cpu1  = get_cpu_time();
+        // wall = wall1 - wall0;
+        // cpu = cpu1 - cpu0;
+        // __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createDevice: %lf", wall);
         
         wall0 = get_wall_time();
         cpu0  = get_cpu_time();
@@ -403,14 +413,14 @@ public:
         cpu = cpu1 - cpu0;
         __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createBuffer: %lf", wall);
         
-        wall0 = get_wall_time();
-        cpu0  = get_cpu_time();
-        createDescriptorSetLayout();
-        wall1 = get_wall_time();
-        cpu1  = get_cpu_time();
-        wall = wall1 - wall0;
-        cpu = cpu1 - cpu0;
-        __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createDescriptorSetLayout: %lf", wall);
+        // wall0 = get_wall_time();
+        // cpu0  = get_cpu_time();
+        // createDescriptorSetLayout();
+        // wall1 = get_wall_time();
+        // cpu1  = get_cpu_time();
+        // wall = wall1 - wall0;
+        // cpu = cpu1 - cpu0;
+        // __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createDescriptorSetLayout: %lf", wall);
         
         wall0 = get_wall_time();
         cpu0  = get_cpu_time();
@@ -421,14 +431,14 @@ public:
         cpu = cpu1 - cpu0;
         __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createDescriptorSet: %lf", wall);
         
-        wall0 = get_wall_time();
-        cpu0  = get_cpu_time();
-        createComputePipeline();
-        wall1 = get_wall_time();
-        cpu1  = get_cpu_time();
-        wall = wall1 - wall0;
-        cpu = cpu1 - cpu0;
-        __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createComputePipeline: %lf", wall);
+        // wall0 = get_wall_time();
+        // cpu0  = get_cpu_time();
+        // createComputePipeline();
+        // wall1 = get_wall_time();
+        // cpu1  = get_cpu_time();
+        // wall = wall1 - wall0;
+        // cpu = cpu1 - cpu0;
+        // __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createComputePipeline: %lf", wall);
         
         wall0 = get_wall_time();
         cpu0  = get_cpu_time();
@@ -467,90 +477,90 @@ public:
         __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "cleanup: %lf", wall);
     }
 
-    void createInstance() {
-        VkApplicationInfo applicationInfo = {};
-        applicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-        applicationInfo.pApplicationName = "Matrix Convolution";
-        applicationInfo.applicationVersion = 0;
-        applicationInfo.pEngineName = "Naive";
-        applicationInfo.engineVersion = 0;
-        applicationInfo.apiVersion = VK_MAKE_VERSION(1, 0, 31);
+    // void createInstance() {
+    //     VkApplicationInfo applicationInfo = {};
+    //     applicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+    //     applicationInfo.pApplicationName = "Matrix Convolution";
+    //     applicationInfo.applicationVersion = 0;
+    //     applicationInfo.pEngineName = "Naive";
+    //     applicationInfo.engineVersion = 0;
+    //     applicationInfo.apiVersion = VK_MAKE_VERSION(1, 0, 31);
         
-        VkInstanceCreateInfo createInfo = {};
-        createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-        createInfo.flags = 0;
-        createInfo.pApplicationInfo = &applicationInfo;
+    //     VkInstanceCreateInfo createInfo = {};
+    //     createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    //     createInfo.flags = 0;
+    //     createInfo.pApplicationInfo = &applicationInfo;
 
-        VK_CHECK_RESULT(vkCreateInstance(
-            &createInfo,
-            NULL,
-            &instance));
-    }
+    //     VK_CHECK_RESULT(vkCreateInstance(
+    //         &createInfo,
+    //         NULL,
+    //         &instance));
+    // }
 
-    void findPhysicalDevice() {
-        uint32_t deviceCount;
-        vkEnumeratePhysicalDevices(instance, &deviceCount, NULL);
-        if (deviceCount == 0) {
-            throw std::runtime_error("could not find a device with vulkan support");
-        }
+    // void findPhysicalDevice() {
+    //     uint32_t deviceCount;
+    //     vkEnumeratePhysicalDevices(instance, &deviceCount, NULL);
+    //     if (deviceCount == 0) {
+    //         throw std::runtime_error("could not find a device with vulkan support");
+    //     }
 
-        std::vector<VkPhysicalDevice> devices(deviceCount);
-        vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
+    //     std::vector<VkPhysicalDevice> devices(deviceCount);
+    //     vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
 
-        for (VkPhysicalDevice device : devices) {
-            if (true) { // As above stated, we do no feature checks, so just accept.
-                physicalDevice = device;
-                break;
-            }
-        }
-    }
+    //     for (VkPhysicalDevice device : devices) {
+    //         if (true) { // As above stated, we do no feature checks, so just accept.
+    //             physicalDevice = device;
+    //             break;
+    //         }
+    //     }
+    // }
 
-    uint32_t getComputeQueueFamilyIndex() {
-        uint32_t queueFamilyCount;
+    // uint32_t getComputeQueueFamilyIndex() {
+    //     uint32_t queueFamilyCount;
 
-        vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, NULL);
+    //     vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, NULL);
 
-        std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-        vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilies.data());
+    //     std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+    //     vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilies.data());
 
-        uint32_t i = 0;
-        for (; i < queueFamilies.size(); ++i) {
-            VkQueueFamilyProperties props = queueFamilies[i];
+    //     uint32_t i = 0;
+    //     for (; i < queueFamilies.size(); ++i) {
+    //         VkQueueFamilyProperties props = queueFamilies[i];
 
-            if (props.queueCount > 0 && (props.queueFlags & VK_QUEUE_COMPUTE_BIT)) {
-                break;
-            }
-        }
+    //         if (props.queueCount > 0 && (props.queueFlags & VK_QUEUE_COMPUTE_BIT)) {
+    //             break;
+    //         }
+    //     }
 
-        if (i == queueFamilies.size()) {
-            throw std::runtime_error("could not find a queue family that supports operations");
-        }
+    //     if (i == queueFamilies.size()) {
+    //         throw std::runtime_error("could not find a queue family that supports operations");
+    //     }
 
-        return i;
-    }
+    //     return i;
+    // }
 
-    void createDevice() {
-        VkDeviceQueueCreateInfo queueCreateInfo = {};
-        queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-        queueFamilyIndex = getComputeQueueFamilyIndex(); // find queue family with compute capability.
-        queueCreateInfo.queueFamilyIndex = queueFamilyIndex;
-        queueCreateInfo.queueCount = 1; // create one queue in this family. We don't need more.
-        float queuePriorities = 1.0;  // we only have one queue, so this is not that imporant. 
-        queueCreateInfo.pQueuePriorities = &queuePriorities;
+    // void createDevice() {
+    //     VkDeviceQueueCreateInfo queueCreateInfo = {};
+    //     queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    //     queueFamilyIndex = getComputeQueueFamilyIndex(); // find queue family with compute capability.
+    //     queueCreateInfo.queueFamilyIndex = queueFamilyIndex;
+    //     queueCreateInfo.queueCount = 1; // create one queue in this family. We don't need more.
+    //     float queuePriorities = 1.0;  // we only have one queue, so this is not that imporant. 
+    //     queueCreateInfo.pQueuePriorities = &queuePriorities;
 
-        VkDeviceCreateInfo deviceCreateInfo = {};
+    //     VkDeviceCreateInfo deviceCreateInfo = {};
 
-        VkPhysicalDeviceFeatures deviceFeatures = {};
+    //     VkPhysicalDeviceFeatures deviceFeatures = {};
 
-        deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-        deviceCreateInfo.pQueueCreateInfos = &queueCreateInfo; // when creating the logical device, we also specify what queues it has.
-        deviceCreateInfo.queueCreateInfoCount = 1;
-        deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
+    //     deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    //     deviceCreateInfo.pQueueCreateInfos = &queueCreateInfo; // when creating the logical device, we also specify what queues it has.
+    //     deviceCreateInfo.queueCreateInfoCount = 1;
+    //     deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
 
-        VK_CHECK_RESULT(vkCreateDevice(physicalDevice, &deviceCreateInfo, NULL, &device)); // create logical device.
+    //     VK_CHECK_RESULT(vkCreateDevice(physicalDevice, &deviceCreateInfo, NULL, &device)); // create logical device.
 
-        vkGetDeviceQueue(device, queueFamilyIndex, 0, &queue);
-    }
+    //     vkGetDeviceQueue(device, queueFamilyIndex, 0, &queue);
+    // }
 
     uint32_t findMemoryType(VkDeviceSize memorySize, VkMemoryPropertyFlags properties) {
         VkPhysicalDeviceMemoryProperties memoryProperties;
@@ -647,28 +657,28 @@ public:
         VK_CHECK_RESULT(vkBindBufferMemory(device, matrixSizes, bufferMemory, matrixASize+matrixBSize+matrixCSize));
     }
 
-    void createDescriptorSetLayout() {
-        VkDescriptorSetLayoutBinding descriptorSetLayoutBindings[4];
+    // void createDescriptorSetLayout() {
+    //     VkDescriptorSetLayoutBinding descriptorSetLayoutBindings[4];
 
-        descriptorSetLayoutBindings[0] = {};
-        descriptorSetLayoutBindings[0].binding = 0; // binding = 0
-        descriptorSetLayoutBindings[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        descriptorSetLayoutBindings[0].descriptorCount = 1;
-        descriptorSetLayoutBindings[0].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    //     descriptorSetLayoutBindings[0] = {};
+    //     descriptorSetLayoutBindings[0].binding = 0; // binding = 0
+    //     descriptorSetLayoutBindings[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    //     descriptorSetLayoutBindings[0].descriptorCount = 1;
+    //     descriptorSetLayoutBindings[0].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
-        descriptorSetLayoutBindings[1] = {};
-        descriptorSetLayoutBindings[1].binding = 1; // binding = 1
-        descriptorSetLayoutBindings[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        descriptorSetLayoutBindings[1].descriptorCount = 1;
-        descriptorSetLayoutBindings[1].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    //     descriptorSetLayoutBindings[1] = {};
+    //     descriptorSetLayoutBindings[1].binding = 1; // binding = 1
+    //     descriptorSetLayoutBindings[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    //     descriptorSetLayoutBindings[1].descriptorCount = 1;
+    //     descriptorSetLayoutBindings[1].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
-        VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {};
-        descriptorSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        descriptorSetLayoutCreateInfo.bindingCount = 2; // only a single binding in this descriptor set layout. 
-        descriptorSetLayoutCreateInfo.pBindings = descriptorSetLayoutBindings; 
+    //     VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {};
+    //     descriptorSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    //     descriptorSetLayoutCreateInfo.bindingCount = 2; // only a single binding in this descriptor set layout. 
+    //     descriptorSetLayoutCreateInfo.pBindings = descriptorSetLayoutBindings; 
 
-        VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCreateInfo, NULL, &descriptorSetLayout));
-    }
+    //     VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCreateInfo, NULL, &descriptorSetLayout));
+    // }
 
     void createDescriptorSet() {
         VkDescriptorPoolSize descriptorPoolSize;
@@ -724,112 +734,112 @@ public:
         vkUpdateDescriptorSets(device, 2, writeDescriptorSets, 0, NULL);
     }
 
-    void createComputePipeline() {
-        // VkPhysicalDeviceProperties devprops;
-        // vkGetPhysicalDeviceProperties(physicalDevice, &devprops);
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxComputeSharedMemorySize: %d", devprops.limits.maxComputeSharedMemorySize);
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxComputeWorkGroupCount[3]: %d %d %d", devprops.limits.maxComputeWorkGroupCount[0], devprops.limits.maxComputeWorkGroupCount[1], devprops.limits.maxComputeWorkGroupCount[2]);
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxComputeWorkGroupInvocations: %d", devprops.limits.maxComputeWorkGroupInvocations);
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxComputeWorkGroupSize[3]: %d %d %d", devprops.limits.maxComputeWorkGroupSize[0], devprops.limits.maxComputeWorkGroupSize[1], devprops.limits.maxComputeWorkGroupSize[2]);
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxDescriptorSetStorageBuffers: %d", devprops.limits.maxDescriptorSetStorageBuffers);
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxPerStageDescriptorStorageBuffers: %d", devprops.limits.maxPerStageDescriptorStorageBuffers);
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxPerStageResources: %d", devprops.limits.maxPerStageResources);
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxStorageBufferRange: %d", devprops.limits.maxStorageBufferRange);
+    // void createComputePipeline() {
+    //     // VkPhysicalDeviceProperties devprops;
+    //     // vkGetPhysicalDeviceProperties(physicalDevice, &devprops);
+    //     // __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxComputeSharedMemorySize: %d", devprops.limits.maxComputeSharedMemorySize);
+    //     // __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxComputeWorkGroupCount[3]: %d %d %d", devprops.limits.maxComputeWorkGroupCount[0], devprops.limits.maxComputeWorkGroupCount[1], devprops.limits.maxComputeWorkGroupCount[2]);
+    //     // __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxComputeWorkGroupInvocations: %d", devprops.limits.maxComputeWorkGroupInvocations);
+    //     // __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxComputeWorkGroupSize[3]: %d %d %d", devprops.limits.maxComputeWorkGroupSize[0], devprops.limits.maxComputeWorkGroupSize[1], devprops.limits.maxComputeWorkGroupSize[2]);
+    //     // __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxDescriptorSetStorageBuffers: %d", devprops.limits.maxDescriptorSetStorageBuffers);
+    //     // __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxPerStageDescriptorStorageBuffers: %d", devprops.limits.maxPerStageDescriptorStorageBuffers);
+    //     // __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxPerStageResources: %d", devprops.limits.maxPerStageResources);
+    //     // __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxStorageBufferRange: %d", devprops.limits.maxStorageBufferRange);
 
-        // Start Timers
-        double wall0 = get_wall_time();
-        double cpu0  = get_cpu_time();
+    //     // Start Timers
+    //     double wall0 = get_wall_time();
+    //     double cpu0  = get_cpu_time();
 
-        std::string source =
-        "#version 450 \n" \
-        "#extension GL_ARB_separate_shader_objects : enable \n" \
-        "layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in; \n" \
-        "layout(binding = 0) buffer floatBuffer { \n" \
-        "    float convFloatB[]; \n" \
-        "}; \n" \
-        "layout(binding = 1) readonly buffer intBuffer { \n" \
-        "    int convIntB[]; \n" \
-        "}; \n" \
-        "void main() { \n" \
-        "  int out_channel = int(gl_GlobalInvocationID.x); \n" \
-        "  int out_y = int(gl_GlobalInvocationID.y); \n" \
-        "  int out_x = int(gl_GlobalInvocationID.z); \n" \
-        "  if((out_channel < convIntB[11]) && (out_x < convIntB[17]) && (out_y < convIntB[18])) { \n" \
-        "      for (int batch = 0; batch < convIntB[7]; ++batch) { \n" \
-        "        float total = 0.0; \n" \
-        "        for (int filter_y = 0; filter_y < convIntB[10]; ++filter_y) { \n" \
-        "          for (int filter_x = 0; filter_x < convIntB[9]; ++filter_x) { \n" \
-        "            for (int in_channel = 0; in_channel < convIntB[4]; ++in_channel) { \n" \
-        "              int in_x = (out_x * convIntB[0] - convIntB[2]) + filter_x; \n" \
-        "              int in_y = (out_y * convIntB[1] - convIntB[3]) + filter_y; \n" \
-        "              if ((in_x >= 0) && (in_x < convIntB[5]) && (in_y >= 0) && \n" \
-        "                  (in_y < convIntB[6])) { \n" \
-        "                total += (convFloatB[2 + in_channel*convIntB[20] + in_x*convIntB[21] +in_y*convIntB[22] + batch*convIntB[23]] *  \n" \
-        "                        convFloatB[convIntB[36] + 2 + in_channel*convIntB[24] + filter_x*convIntB[25] + filter_y*convIntB[26] + out_channel*convIntB[27]]); \n" \
-        "              } \n" \
-        "            } \n" \
-        "          } \n" \
-        "        } \n" \
-        "        float bias_value = 0.0; \n" \
-        "        if (convIntB[38] > 0) { \n" \
-        "          bias_value = convFloatB[convIntB[36] + 2 + convIntB[37]+(out_channel*convIntB[28])]; \n" \
-        "        } \n" \
-        "        convFloatB[2 + convIntB[36] + convIntB[37] + convIntB[38] + out_channel*convIntB[32] + out_x*convIntB[33] + out_y*convIntB[34] + batch*convIntB[35]] = min(max(total + bias_value,convFloatB[0]),convFloatB[1]); \n" \
-        "      } \n" \
-        "  } \n" \
-        "}";
+    //     std::string source =
+    //     "#version 450 \n" \
+    //     "#extension GL_ARB_separate_shader_objects : enable \n" \
+    //     "layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in; \n" \
+    //     "layout(binding = 0) buffer floatBuffer { \n" \
+    //     "    float convFloatB[]; \n" \
+    //     "}; \n" \
+    //     "layout(binding = 1) readonly buffer intBuffer { \n" \
+    //     "    int convIntB[]; \n" \
+    //     "}; \n" \
+    //     "void main() { \n" \
+    //     "  int out_channel = int(gl_GlobalInvocationID.x); \n" \
+    //     "  int out_y = int(gl_GlobalInvocationID.y); \n" \
+    //     "  int out_x = int(gl_GlobalInvocationID.z); \n" \
+    //     "  if((out_channel < convIntB[11]) && (out_x < convIntB[17]) && (out_y < convIntB[18])) { \n" \
+    //     "      for (int batch = 0; batch < convIntB[7]; ++batch) { \n" \
+    //     "        float total = 0.0; \n" \
+    //     "        for (int filter_y = 0; filter_y < convIntB[10]; ++filter_y) { \n" \
+    //     "          for (int filter_x = 0; filter_x < convIntB[9]; ++filter_x) { \n" \
+    //     "            for (int in_channel = 0; in_channel < convIntB[4]; ++in_channel) { \n" \
+    //     "              int in_x = (out_x * convIntB[0] - convIntB[2]) + filter_x; \n" \
+    //     "              int in_y = (out_y * convIntB[1] - convIntB[3]) + filter_y; \n" \
+    //     "              if ((in_x >= 0) && (in_x < convIntB[5]) && (in_y >= 0) && \n" \
+    //     "                  (in_y < convIntB[6])) { \n" \
+    //     "                total += (convFloatB[2 + in_channel*convIntB[20] + in_x*convIntB[21] +in_y*convIntB[22] + batch*convIntB[23]] *  \n" \
+    //     "                        convFloatB[convIntB[36] + 2 + in_channel*convIntB[24] + filter_x*convIntB[25] + filter_y*convIntB[26] + out_channel*convIntB[27]]); \n" \
+    //     "              } \n" \
+    //     "            } \n" \
+    //     "          } \n" \
+    //     "        } \n" \
+    //     "        float bias_value = 0.0; \n" \
+    //     "        if (convIntB[38] > 0) { \n" \
+    //     "          bias_value = convFloatB[convIntB[36] + 2 + convIntB[37]+(out_channel*convIntB[28])]; \n" \
+    //     "        } \n" \
+    //     "        convFloatB[2 + convIntB[36] + convIntB[37] + convIntB[38] + out_channel*convIntB[32] + out_x*convIntB[33] + out_y*convIntB[34] + batch*convIntB[35]] = min(max(total + bias_value,convFloatB[0]),convFloatB[1]); \n" \
+    //     "      } \n" \
+    //     "  } \n" \
+    //     "}";
 
-        shaderc::Compiler compiler;
-        shaderc::CompileOptions options;
+    //     shaderc::Compiler compiler;
+    //     shaderc::CompileOptions options;
 
-        shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(
-          source.c_str(), source.size(), shaderc_glsl_compute_shader, "conv.glsl", options);
+    //     shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(
+    //       source.c_str(), source.size(), shaderc_glsl_compute_shader, "conv.glsl", options);
 
-        if (module.GetCompilationStatus() !=
-            shaderc_compilation_status_success) {
-        }
+    //     if (module.GetCompilationStatus() !=
+    //         shaderc_compilation_status_success) {
+    //     }
 
-        std::vector<uint32_t> code(module.cbegin(), module.cend());
+    //     std::vector<uint32_t> code(module.cbegin(), module.cend());
 
-        // Stop timers
-        double wall1 = get_wall_time();
-        double cpu1  = get_cpu_time();
-        double wall = wall1 - wall0;
-        double cpu = cpu1 - cpu0;
-        __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "compileShader: %lf", wall);
+    //     // Stop timers
+    //     double wall1 = get_wall_time();
+    //     double cpu1  = get_cpu_time();
+    //     double wall = wall1 - wall0;
+    //     double cpu = cpu1 - cpu0;
+    //     __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "compileShader: %lf", wall);
 
-        VkShaderModuleCreateInfo createInfo = {};
-        createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-        createInfo.pCode = code.data();
-        createInfo.codeSize = sizeof(uint32_t)*code.size();
+    //     VkShaderModuleCreateInfo createInfo = {};
+    //     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    //     createInfo.pCode = code.data();
+    //     createInfo.codeSize = sizeof(uint32_t)*code.size();
         
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanConv", "codeSize : %d", createInfo.codeSize);
+    //     // __android_log_print(ANDROID_LOG_INFO, "VulkanConv", "codeSize : %d", createInfo.codeSize);
 
-        VK_CHECK_RESULT(vkCreateShaderModule(device, &createInfo, NULL, &computeShaderModule));
+    //     VK_CHECK_RESULT(vkCreateShaderModule(device, &createInfo, NULL, &computeShaderModule));
 
-        VkPipelineShaderStageCreateInfo shaderStageCreateInfo = {};
-        shaderStageCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        shaderStageCreateInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-        shaderStageCreateInfo.module = computeShaderModule;
-        shaderStageCreateInfo.pName = "main";
+    //     VkPipelineShaderStageCreateInfo shaderStageCreateInfo = {};
+    //     shaderStageCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    //     shaderStageCreateInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+    //     shaderStageCreateInfo.module = computeShaderModule;
+    //     shaderStageCreateInfo.pName = "main";
 
-        VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {};
-        pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        pipelineLayoutCreateInfo.setLayoutCount = 1;
-        pipelineLayoutCreateInfo.pSetLayouts = &descriptorSetLayout; 
+    //     VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {};
+    //     pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    //     pipelineLayoutCreateInfo.setLayoutCount = 1;
+    //     pipelineLayoutCreateInfo.pSetLayouts = &descriptorSetLayout; 
         
-        VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, NULL, &pipelineLayout));
+    //     VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, NULL, &pipelineLayout));
 
-        VkComputePipelineCreateInfo pipelineCreateInfo = {};
-        pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-        pipelineCreateInfo.stage = shaderStageCreateInfo;
-        pipelineCreateInfo.layout = pipelineLayout;
+    //     VkComputePipelineCreateInfo pipelineCreateInfo = {};
+    //     pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    //     pipelineCreateInfo.stage = shaderStageCreateInfo;
+    //     pipelineCreateInfo.layout = pipelineLayout;
 
-        VK_CHECK_RESULT(vkCreateComputePipelines(
-            device, VK_NULL_HANDLE,
-            1, &pipelineCreateInfo,
-            NULL, &pipeline));
-    }
+    //     VK_CHECK_RESULT(vkCreateComputePipelines(
+    //         device, VK_NULL_HANDLE,
+    //         1, &pipelineCreateInfo,
+    //         NULL, &pipeline));
+    // }
 
     void createCommandBuffer() {
         VkCommandPoolCreateInfo commandPoolCreateInfo = {};
@@ -872,8 +882,8 @@ public:
         // double wall0 = get_wall_time();
         // double cpu0  = get_cpu_time();
 
-        VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, 0));
-        VK_CHECK_RESULT(vkQueueWaitIdle(queue));
+        VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, 0)); //Error -3
+        VK_CHECK_RESULT(vkQueueWaitIdle(queue)); //Error -4
 
         // // Stop timers
         // double wall1 = get_wall_time();
@@ -899,14 +909,14 @@ public:
         vkFreeMemory(device, bufferMemory, NULL);
         vkDestroyBuffer(device, matrixA, NULL);
         vkDestroyBuffer(device, matrixSizes, NULL);
-        vkDestroyShaderModule(device, computeShaderModule, NULL);
+        //vkDestroyShaderModule(device, computeShaderModule, NULL);
         vkDestroyDescriptorPool(device, descriptorPool, NULL);
-        vkDestroyDescriptorSetLayout(device, descriptorSetLayout, NULL);
-        vkDestroyPipelineLayout(device, pipelineLayout, NULL);
-        vkDestroyPipeline(device, pipeline, NULL);
+        //vkDestroyDescriptorSetLayout(device, descriptorSetLayout, NULL);
+        //vkDestroyPipelineLayout(device, pipelineLayout, NULL);
+        //vkDestroyPipeline(device, pipeline, NULL);
         vkDestroyCommandPool(device, commandPool, NULL);  
-        vkDestroyDevice(device, NULL);
-        vkDestroyInstance(instance, NULL);    
+        //vkDestroyDevice(device, NULL);
+        //vkDestroyInstance(instance, NULL);    
     }
 };
 
@@ -917,7 +927,10 @@ void vulkanTestConv(const float* input_data, const int input_size,
           int stride_width, int stride_height, 
           int pad_width, int pad_height, 
           const int* dim_sizes, const int* dim_strides,
-          float output_activation_min, float output_activation_max) {
+          float output_activation_min, float output_activation_max,
+          VkPhysicalDevice physicalDevice, VkDevice device, VkPipeline pipelineConv, VkPipelineLayout pipelineLayoutConv, 
+    VkDescriptorSetLayout descriptorSetLayoutConv, VkQueue queueV, uint32_t queueFamilyIndex) {
+
     VulkanConvolution app;
     app.run(input_data,input_size,
           filter_data,filter_size,
@@ -926,7 +939,8 @@ void vulkanTestConv(const float* input_data, const int input_size,
           stride_width, stride_height, 
           pad_width, pad_height, 
           dim_sizes, dim_strides,
-          output_activation_min, output_activation_max);
+          output_activation_min, output_activation_max,
+          physicalDevice, device, pipelineConv, pipelineLayoutConv, descriptorSetLayoutConv, queueV, queueFamilyIndex);
 }
 
 inline void OpenCLConv(const float* input_data, const int input_size,
@@ -1249,7 +1263,7 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
                  float* output_data, const Dims<4>& output_dims,
                  float* im2col_data, const Dims<4>& im2col_dims,
                  cl_context context_cl, cl_command_queue queue, cl_program program,
-                 VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, 
+                 VkPhysicalDevice physicalDevice, VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, 
     VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex) {
   int inheightsize = input_dims.sizes[2];
   int inwidthsize = input_dims.sizes[1];
@@ -1358,7 +1372,9 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
           stride_width, stride_height, 
           pad_width, pad_height, 
           sizes, strides,
-          output_activation_min, output_activation_max);
+          output_activation_min, output_activation_max,
+          physicalDevice, device, pipelineConv, pipelineLayoutConv, 
+          descriptorSetLayoutConv, queueV, queueFamilyIndex);
 
   // Stop timers
   double wall1 = get_wall_time();

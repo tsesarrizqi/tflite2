@@ -19,10 +19,10 @@ limitations under the License.
 
 //note: vulkan
 #include "vulkan/vulkan.h"
-#include "vulkan/vk_platform.h"
+// #include "vulkan/vk_platform.h"
 
 //note: shaderc
-#include "shaderc/shaderc.hpp"
+// #include "shaderc/shaderc.hpp"
 
 #ifndef USE_NEON
 #if defined(__ARM_NEON__) || defined(__ARM_NEON)

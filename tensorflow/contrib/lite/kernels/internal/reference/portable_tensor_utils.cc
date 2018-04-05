@@ -29,10 +29,10 @@ limitations under the License.
 
 //note: vulkan
 #include "vulkan/vulkan.h"
-#include "vulkan/vk_platform.h"
+// #include "vulkan/vk_platform.h"
 
 //note: shaderc
-#include "shaderc/shaderc.hpp"
+// #include "shaderc/shaderc.hpp"
 
 namespace tflite {
 namespace tensor_utils {
@@ -73,7 +73,7 @@ void PortableMatrixBatchVectorMultiplyAccumulateOpenCL(const float* matrix,
                                                  int n_batch, float* result,
                                                  int result_stride,
                                                  cl_context context_cl, cl_command_queue queue, cl_program program,
-                                                 VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, 
+                                                 VkPhysicalDevice physicalDevice, VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, 
     VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex) {
   // vector per kolom
   // matrix per baris

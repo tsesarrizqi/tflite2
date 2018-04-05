@@ -34,10 +34,10 @@ limitations under the License.
 
 //note: vulkan
 #include "vulkan/vulkan.h"
-#include "vulkan/vk_platform.h"
+// #include "vulkan/vk_platform.h"
 
 //note: shaderc
-#include "shaderc/shaderc.hpp"
+// #include "shaderc/shaderc.hpp"
 
 namespace tflite {
 
@@ -137,7 +137,7 @@ class Interpreter {
                                      size_t init_data_size, void* builtin_data,
                                      const TfLiteRegistration* registration,
                                      cl_context context_cl, cl_command_queue queue, cl_program program,
-                                     VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, 
+                                     VkPhysicalDevice physicalDevice, VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, 
     VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex,
                                      int* node_index = nullptr);
 
@@ -278,7 +278,7 @@ class Interpreter {
   void* OpInitOpenCL(const TfLiteRegistration& op_reg, const char* buffer,
                size_t length,
                cl_context context_cl, cl_command_queue queue, cl_program program,
-               VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, 
+               VkPhysicalDevice physicalDevice, VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, 
     VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex) {
     // //note: andoird log
     // __android_log_print(ANDROID_LOG_INFO, "Ngising", "opinit");
@@ -288,7 +288,7 @@ class Interpreter {
     }
     __android_log_print(ANDROID_LOG_INFO, "Ngising", "masuk initopencl");
     return op_reg.initopencl(&context_, buffer, length, context_cl, queue, program,
-      device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, 
+      physicalDevice, device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, 
                descriptorSetLayoutConv, descriptorSetLayoutMatmul, queueV, queueFamilyIndex);
   }
 
