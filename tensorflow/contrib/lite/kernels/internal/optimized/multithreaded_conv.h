@@ -965,27 +965,14 @@ inline void OpenCLConv(const float* input_data, const int input_size,
   // cl_command_queue queue;   
   // cl_program program;       
   cl_kernel kernel;
-
-  size_t globalSize0, globalSize1, localSize0, localSize1;
-  localSize0 = 8;
-  localSize1 = 8;
   
   int batches = dim_sizes[3];
   int output_depth = dim_sizes[7];
   int output_height = dim_sizes[14];  
   int output_width = dim_sizes[13];
 
-  __android_log_print(ANDROID_LOG_INFO, "Convdimension", "batches: %d", batches);
-  __android_log_print(ANDROID_LOG_INFO, "Convdimension", "output_depth: %d", output_depth);
-  __android_log_print(ANDROID_LOG_INFO, "Convdimension", "output_height: %d", output_height);
-  __android_log_print(ANDROID_LOG_INFO, "Convdimension", "output_width: %d", output_width);
-
-  globalSize0 = ceil(batches*output_depth/(localSize0*1.0))*localSize0;
-  globalSize1 = ceil(output_height*output_width/(localSize1*1.0))*localSize1;
-  globalSize1 = ceil(output_height*output_width/(localSize1*1.0))*localSize1;
-
-  const size_t local[3] = { 8, 8, 8 };
-  const size_t global[3] = { (size_t) (((output_depth-1)/8+1)*8), (size_t) (((output_height-1)/8+1)*8), (size_t) (((output_width-1)/8+1)*8) };
+  const size_t local[2] = { 8, 32 };
+  const size_t global[2] = { (size_t) (((output_depth*batches-1)/8+1)*8), (size_t) (((output_height*output_width-1)/32+1)*32) };
 
   cl_int err;
 
@@ -1092,7 +1079,7 @@ inline void OpenCLConv(const float* input_data, const int input_size,
   wall0 = get_wall_time();
   cpu0  = get_cpu_time();
 
-  err = clEnqueueNDRangeKernel(queue, kernel, 3, NULL, global, local, 0, NULL, NULL);
+  err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global, local, 0, NULL, NULL);
 
   clFinish(queue);
 
@@ -1104,7 +1091,7 @@ inline void OpenCLConv(const float* input_data, const int input_size,
   cpu = cpu1 - cpu0;
 
   // note: andoird log
-  __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Walltime runkernelO: %lf", wall);
+  __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelOclConv: %lf", wall);
 
   __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Converror: %d", err);
 
@@ -1254,6 +1241,64 @@ inline void Conv2(const float* input_data, const Dims<4>& input_dims,
   }
 }
 
+void ConvApik(const float* input_data, 
+          const float* filter_data, 
+          const float* bias_data, 
+          float* output_data,
+          int stride_width, int stride_height, 
+          int pad_width, int pad_height, 
+          const int* dim_sizes, const int* dim_strides,
+          float output_activation_min, float output_activation_max) {
+  const int batches = dim_sizes[3]; //MatchingArraySize(input_dims, 3, output_dims, 3);
+  const int input_depth = dim_sizes[0]; //MatchingArraySize(input_dims, 0, filter_dims, 0);
+  const int output_depth = dim_sizes[7]; //MatchingArraySize(filter_dims, 3, output_dims, 0);
+  // if (bias_data) {
+  //   TFLITE_DCHECK_EQ(ArraySize(filter_dims, 3), ArraySize(bias_dims, 0));
+  // }
+  const int input_height = dim_sizes[2]; //ArraySize(input_dims, 2);
+  const int input_width = dim_sizes[1]; //ArraySize(input_dims, 1);
+  const int filter_height = dim_sizes[6]; //ArraySize(filter_dims, 2);
+  const int filter_width = dim_sizes[5]; //ArraySize(filter_dims, 1);
+  const int output_height = dim_sizes[14]; //ArraySize(output_dims, 2);
+  const int output_width = dim_sizes[13]; //ArraySize(output_dims, 1);
+  for (int batch = 0; batch < batches; ++batch) {
+    for (int out_y = 0; out_y < output_height; ++out_y) {
+      for (int out_x = 0; out_x < output_width; ++out_x) {
+        for (int out_channel = output_depth/2; out_channel < output_depth; ++out_channel) {
+          const int in_x_origin = (out_x * stride_width) - pad_width;
+          const int in_y_origin = (out_y * stride_height) - pad_height;
+          float total = 0.0;
+          for (int filter_y = 0; filter_y < filter_height; ++filter_y) {
+            for (int filter_x = 0; filter_x < filter_width; ++filter_x) {
+              for (int in_channel = 0; in_channel < input_depth; ++in_channel) {
+                const int in_x = in_x_origin + filter_x;
+                const int in_y = in_y_origin + filter_y;
+                // If the location is outside the bounds of the input image,
+                // use zero as a default value.
+                if ((in_x >= 0) && (in_x < input_width) && (in_y >= 0) &&
+                    (in_y < input_height)) {
+                  float input_value = input_data[in_channel*dim_strides[0] + in_x*dim_strides[1] + 
+                                                  in_y*dim_strides[2] + batch*dim_strides[3]];
+                  float filter_value =
+                      filter_data[in_channel*dim_strides[4] + filter_x*dim_strides[5] +
+                                         filter_y*dim_strides[6] + out_channel*dim_strides[7]];
+                  total += (input_value * filter_value);
+                }
+              }
+            }
+          }
+          float bias_value = 0.0f;
+          if (bias_data) {
+            bias_value = bias_data[out_channel*dim_strides[8]];
+          }
+          output_data[out_channel*dim_strides[12] + out_x*dim_strides[13] + out_y*dim_strides[14] + batch*dim_strides[15]] 
+            = std::min(std::max(total + bias_value, output_activation_min), output_activation_max);
+        }
+      }
+    }
+  }
+}
+
 inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
                  const float* filter_data, const Dims<4>& filter_dims,
                  const float* bias_data, const Dims<4>& bias_dims,
@@ -1352,20 +1397,7 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
 
   // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Walltime: %lf", wall);
 
-  // OpenCLConv(input_data, input_size,
-  //         filter_data, filter_size,
-  //         bias_data, bias_size,
-  //         output_data, output_size,
-  //         stride_width, stride_height, 
-  //         pad_width, pad_height, 
-  //         sizes, strides,
-  //         output_activation_min, output_activation_max,
-  //         context_cl, queue, program);
-
-  double wall0 = get_wall_time();
-  double cpu0  = get_cpu_time();
-
-  vulkanTestConv(input_data, input_size,
+  OpenCLConv(input_data, input_size,
           filter_data, filter_size,
           bias_data, bias_size,
           output_data, output_size,
@@ -1373,15 +1405,30 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
           pad_width, pad_height, 
           sizes, strides,
           output_activation_min, output_activation_max,
-          physicalDevice, device, pipelineConv, pipelineLayoutConv, 
-          descriptorSetLayoutConv, queueV, queueFamilyIndex);
+          context_cl, queue, program);
 
-  // Stop timers
-  double wall1 = get_wall_time();
-  double cpu1  = get_cpu_time();
-  double wall = wall1 - wall0;
-  double cpu = cpu1 - cpu0;
-  __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "totalRuntime: %lf", wall);
+  // double wall0 = get_wall_time();
+  // double cpu0  = get_cpu_time();
+
+  // vulkanTestConv(input_data, input_size,
+  //         filter_data, filter_size,
+  //         bias_data, bias_size,
+  //         output_data, output_size,
+  //         stride_width, stride_height, 
+  //         pad_width, pad_height, 
+  //         sizes, strides,
+  //         output_activation_min, output_activation_max,
+  //         physicalDevice, device, pipelineConv, pipelineLayoutConv, 
+  //         descriptorSetLayoutConv, queueV, queueFamilyIndex);
+
+
+
+  // // Stop timers
+  // double wall1 = get_wall_time();
+  // double cpu1  = get_cpu_time();
+  // double wall = wall1 - wall0;
+  // double cpu = cpu1 - cpu0;
+  // __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "totalRuntime: %lf", wall);
 
   // Conv2(input_data, input_dims,
   //                filter_data, filter_dims,

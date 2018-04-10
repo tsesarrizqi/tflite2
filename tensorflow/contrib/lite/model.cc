@@ -62,126 +62,49 @@ limitations under the License.
 }
 
 const char *kernelSource =           "\n" \
-"#define TS 32      \n" \
-"#define WIDTH 4      \n" \
-"__kernel void conv(__global float* input_data,   \n" \
-"          __global float* filter_data,   \n" \
-"          __global float* bias_data,   \n" \
-"          __global float* output_data,  \n" \
-"          int stride_width, int stride_height,   \n" \
-"          int pad_width, int pad_height,   \n" \
-"          __global int* dim_sizes, __global int* dim_strides,  \n" \
-"          float output_activation_min, float output_activation_max) {  \n" \
-"  int out_channel = get_global_id(0);\n" \
-"  int out_y = get_global_id(1);  \n" \
-"  int out_x = get_global_id(2);  \n" \
-"  if((out_channel < dim_sizes[7]) && (out_y < dim_sizes[14]) && (out_x < dim_sizes[13])) {  \n" \
-"      for (int batch = 0; batch < dim_sizes[3]; ++batch) { \n" \
-"        float total = 0.0; \n" \
-"        for (int filter_y = 0; filter_y < dim_sizes[6]; ++filter_y) {  \n" \
-"          for (int filter_x = 0; filter_x < dim_sizes[5]; ++filter_x) {  \n" \
-"            for (int in_channel = 0; in_channel < dim_sizes[0]; ++in_channel) {  \n" \
-"              int in_x = (out_x * stride_width) - pad_width + filter_x;  \n" \
-"              int in_y = (out_y * stride_height) - pad_height + filter_y;  \n" \
-"              if ((in_x >= 0) && (in_x < dim_sizes[1]) && (in_y >= 0) &&  \n" \
-"                  (in_y < dim_sizes[2])) {  \n" \
-"                float input_value = input_data[in_channel*dim_strides[0] + in_x*dim_strides[1] +   \n" \
-"                                                in_y*dim_strides[2] + batch*dim_strides[3]];  \n" \
-"                float filter_value =  \n" \
-"                    filter_data[in_channel*dim_strides[4] + filter_x*dim_strides[5] +  \n" \
-"                                       filter_y*dim_strides[6] + out_channel*dim_strides[7]];  \n" \
-"                total += (input_value * filter_value);  \n" \
-"              }  \n" \
-"            }  \n" \
-"          }  \n" \
-"        }  \n" \
-"        float bias_value = 0.0;  \n" \
-"        if (bias_data) {  \n" \
-"          bias_value = bias_data[out_channel*dim_strides[8]];  \n" \
-"        }  \n" \
-"        output_data[out_channel*dim_strides[12] + out_x*dim_strides[13] +   \n" \
-"                     out_y*dim_strides[14] + batch*dim_strides[15]] = min(max(total + bias_value,output_activation_min),output_activation_max); \n" \
-"      }  \n" \
-"  }  \n" \
-"}\n" \
-"  \n" \
-"       \n" \
-"__kernel void matrixVectorMul(__global float4* C,         \n" \
-"                      const __global float4* A,         \n" \
-"                      const __global float4* B,         \n" \
-"                      int K, int M, int N) {         \n" \
-"          \n" \
-"    // Thread identifiers      \n" \
-"    const int row = get_local_id(0); // Local row ID (max: TS/WIDTH)      \n" \
-"    const int col = get_local_id(1); // Local col ID (max: TS)      \n" \
-"    const int globalRow = (TS/WIDTH)*get_group_id(0) + row; // 0..M/WIDTH      \n" \
-"    const int globalCol = TS*get_group_id(1) + col; // 0..N      \n" \
-"       \n" \
-"    // Local memory to fit a tile of TS*TS elements of A and B      \n" \
-"    __local float4 Asub[TS][TS/WIDTH];      \n" \
-"    __local float4 Bsub[TS][TS/WIDTH];      \n" \
-"       \n" \
-"    // Initialise the accumulation registers      \n" \
-"    float4 acc = { 0.0f, 0.0f, 0.0f, 0.0f };      \n" \
-"          \n" \
-"    // Loop over all tiles      \n" \
-"    const int numTiles = K/TS;      \n" \
-"    for (int t=0; t<numTiles; t++) {      \n" \
-"       \n" \
-"        // Load one tile of A and B into local memory      \n" \
-"        const int tiledRow = (TS/WIDTH)*t + row;      \n" \
-"        const int tiledCol = TS*t + col;      \n" \
-"        if(globalRow < (M/WIDTH)) {     \n" \
-"          Asub[col][row] = A[tiledCol*(M/WIDTH) + globalRow];     \n" \
-"        }      \n" \
-"        else {     \n" \
-"           float4 tmp = { 0.0f, 0.0f, 0.0f, 0.0f };  \n" \
-"           Asub[col][row] = tmp;     \n" \
-"        }     \n" \
-"        if(globalCol < N) {     \n" \
-"          Bsub[col][row] = B[globalCol*(K/WIDTH) + tiledRow];     \n" \
-"        }      \n" \
-"        else {     \n" \
-"           float4 tmp = { 0.0f, 0.0f, 0.0f, 0.0f };  \n" \
-"           Bsub[col][row] = tmp;     \n" \
-"        }     \n" \
-"             \n" \
-"        // Synchronise to make sure the tile is loaded      \n" \
-"        barrier(CLK_LOCAL_MEM_FENCE);      \n" \
-"       \n" \
-"        if(globalCol < N) {     \n" \
-"          // Perform the computation for a single tile      \n" \
-"          float4 vecA, vecB;      \n" \
-"          float valB;      \n" \
-"          for (int k=0; k<TS/WIDTH; k++) {      \n" \
-"              vecB = Bsub[col][k];      \n" \
-"              for (int w=0; w<WIDTH; w++) {      \n" \
-"                  vecA = Asub[WIDTH*k + w][row];      \n" \
-"                  switch (w) {      \n" \
-"                      case 0: valB = vecB.x; break;      \n" \
-"                      case 1: valB = vecB.y; break;      \n" \
-"                      case 2: valB = vecB.z; break;      \n" \
-"                      case 3: valB = vecB.w; break;      \n" \
-"                  }      \n" \
-"                  acc.x += vecA.x * valB;      \n" \
-"                  acc.y += vecA.y * valB;      \n" \
-"                  acc.z += vecA.z * valB;      \n" \
-"                  acc.w += vecA.w * valB;      \n" \
-"              }     \n" \
-"          }      \n" \
-"        }     \n" \
-"      \n" \
-"        // Synchronise before loading the next tile      \n" \
-"        barrier(CLK_LOCAL_MEM_FENCE);      \n" \
-"    }      \n" \
-"        \n" \
-"    if((globalCol < N) && (globalRow < (M/WIDTH))) {     \n" \
-"      // Store the final results in C      \n" \
-"      C[globalCol*(M/WIDTH) + globalRow] = acc;     \n" \
-"    }      \n" \
-"         \n" \
-"}      \n" \
+"__kernel void conv(__global float* input_data,    \n" \
+"          __constant float* filter_data,    \n" \
+"          __global float* bias_data,    \n" \
+"          __global float* output_data,   \n" \
+"          int stride_width, int stride_height,    \n" \
+"          int pad_width, int pad_height,    \n" \
+"          __global int16* dim_sizes0, __global int16* dim_strides0,   \n" \
+"          float output_activation_min, float output_activation_max) {   \n" \
 "     \n" \
+"    int batchdepth = get_global_id(0);   \n" \
+"    int widthheight = get_global_id(1);   \n" \
+"    int16 dim_sizes = dim_sizes0[0];   \n" \
+"    int output_depth = dim_sizes.s7;  \n" \
+"    int output_height = dim_sizes.se;   \n" \
+"    int batch = batchdepth/output_depth;   \n" \
+"    int out_channel = batchdepth\%output_depth;   \n" \
+"    int out_x = widthheight/output_height;   \n" \
+"    int out_y = widthheight\%output_height;   \n" \
+"    if((batch < dim_sizes.s3) && (out_x < dim_sizes.sd) && (out_y < output_height) && (out_channel < output_depth/2)) {   \n" \
+"            int16 dim_strides = dim_strides0[0];   \n" \
+"            float total = 0.0;   \n" \
+"            for (int filter_y = 0; filter_y < dim_sizes.s6; ++filter_y) {   \n" \
+"              for (int filter_x = 0; filter_x < dim_sizes.s5; ++filter_x) {   \n" \
+"                for (int in_channel = 0; in_channel < dim_sizes.s0; ++in_channel) {   \n" \
+"                  int in_x = (out_x * stride_width) - pad_width + filter_x;   \n" \
+"                  int in_y = (out_y * stride_height) - pad_height + filter_y;   \n" \
+"                  if ((in_x >= 0) && (in_x < dim_sizes.s1) && (in_y >= 0) &&   \n" \
+"                      (in_y < dim_sizes.s2)) {   \n" \
+"                    float input_value = input_data[in_channel*dim_strides.s0 + in_x*dim_strides.s1 + in_y*dim_strides.s2 + batch*dim_strides.s3];   \n" \
+"                    float filter_value = filter_data[in_channel*dim_strides.s4 + filter_x*dim_strides.s5 + filter_y*dim_strides.s6 + out_channel*dim_strides.s7];  \n" \
+"                    total += (input_value * filter_value);   \n" \
+"                  }   \n" \
+"                }   \n" \
+"              }   \n" \
+"            }   \n" \
+"            float bias_value = 0.0;   \n" \
+"            if (bias_data) {   \n" \
+"              bias_value = bias_data[out_channel*dim_strides.s8];   \n" \
+"            } \n" \
+"            output_data[out_channel*dim_strides.sc + out_x*dim_strides.sd + out_y*dim_strides.se + batch*dim_strides.sf] = min(max(total + bias_value, output_activation_min), output_activation_max); \n" \
+"    }  \n" \
+"}   \n" \
+"  \n" \
 "__kernel void transpose(__global float4* input, __global float* output,\n" \
 "    int rows, int cols) {         \n" \
 "   int row = get_global_id(0);                                      \n" \
@@ -192,24 +115,36 @@ const char *kernelSource =           "\n" \
 "   output[(col4*4+2)*rows + row] = in_value.z;\n" \
 "   output[(col4*4+3)*rows + row] = in_value.w;\n" \
 "}      \n" \
-"__kernel void matrixVectorMulNaive(__global float* resultVector,     \n" \
-"    __global float* matrixA,     \n" \
-"    __global float* vectorB,      \n" \
-"    int width_A,     \n" \
-"    int height_A,     \n" \
-"    int width_B)     \n" \
-"{     \n" \
-"    int idx = get_global_id(0);\n" \
-"    int idx2 = get_global_id(1);      \n" \
-"      \n" \
-"    if((idx < height_A) && (idx2 < width_B)) {  \n" \
-"        float value = 0.0f;     \n" \
-"        for (int k = 0; k < width_A; ++k) {     \n" \
-"            value += matrixA[idx * width_A + k] * vectorB[idx2*width_A+k];     \n" \
-"        }     \n" \
-"        resultVector[idx2*height_A+idx] = value;     \n" \
-"   }     \n" \   
-"}  \n" \
+"__kernel void matrixVectorMulF4(__global float4* result,    \n" \
+"    const __global float4* matrix,    \n" \
+"    const __global float4* vector,     \n" \
+"    int m_cols,    \n" \
+"    int m_rows,    \n" \
+"    int n_batch)    \n" \
+"{  \n" \
+"    int row = get_global_id(0)*4; \n" \
+"    int localidx = get_local_id(1); \n" \
+"    __local float4 Aacc[32]; \n" \
+"    if (row < m_rows) { \n" \
+"        float4 sum = {0.0, 0.0, 0.0, 0.0}; \n" \
+"        for(int i = localidx; i < localidx+(m_cols/128); i++){ \n" \
+"            float4 currb = vector[i];\n" \
+"            sum.x += dot(matrix[(row*m_cols/4) + i],currb);\n" \
+"            sum.y += dot(matrix[((row+1)*m_cols/4) + i],currb); \n" \
+"            sum.z += dot(matrix[((row+2)*m_cols/4) + i],currb);\n" \
+"            sum.w += dot(matrix[((row+3)*m_cols/4) + i],currb);\n" \
+"        } \n" \
+"        Aacc[localidx] = sum; \n" \
+"        barrier(CLK_LOCAL_MEM_FENCE);      \n" \
+"        if(localidx == 0) { \n" \
+"            float4 total = {0.0, 0.0, 0.0, 0.0}; \n" \
+"            for(int i = 0; i < 32; i++) { \n" \
+"                total = total + Aacc[i]; \n" \
+"            } \n" \
+"            result[row/4] = total; \n" \
+"        } \n" \
+"    } \n" \
+"} \n" \
 "\n";
 
 
@@ -982,42 +917,52 @@ void createDescriptorSetLayoutConv() {
 
 void createConvPipeline() {
     std::string source =
-    "#version 450 \n" \
-    "#extension GL_ARB_separate_shader_objects : enable \n" \
-    "layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in; \n" \
-    "layout(binding = 0) buffer floatBuffer { \n" \
-    "    float convFloatB[]; \n" \
-    "}; \n" \
-    "layout(binding = 1) readonly buffer intBuffer { \n" \
-    "    int convIntB[]; \n" \
-    "}; \n" \
-    "void main() { \n" \
-    "  int out_channel = int(gl_GlobalInvocationID.x); \n" \
-    "  int out_y = int(gl_GlobalInvocationID.y); \n" \
-    "  int out_x = int(gl_GlobalInvocationID.z); \n" \
-    "  if((out_channel < convIntB[11]) && (out_x < convIntB[17]) && (out_y < convIntB[18])) { \n" \
-    "      for (int batch = 0; batch < convIntB[7]; ++batch) { \n" \
-    "        float total = 0.0; \n" \
-    "        for (int filter_y = 0; filter_y < convIntB[10]; ++filter_y) { \n" \
-    "          for (int filter_x = 0; filter_x < convIntB[9]; ++filter_x) { \n" \
-    "            for (int in_channel = 0; in_channel < convIntB[4]; ++in_channel) { \n" \
-    "              int in_x = (out_x * convIntB[0] - convIntB[2]) + filter_x; \n" \
-    "              int in_y = (out_y * convIntB[1] - convIntB[3]) + filter_y; \n" \
-    "              if ((in_x >= 0) && (in_x < convIntB[5]) && (in_y >= 0) && \n" \
-    "                  (in_y < convIntB[6])) { \n" \
-    "                total += (convFloatB[2 + in_channel*convIntB[20] + in_x*convIntB[21] +in_y*convIntB[22] + batch*convIntB[23]] *  \n" \
-    "                        convFloatB[convIntB[36] + 2 + in_channel*convIntB[24] + filter_x*convIntB[25] + filter_y*convIntB[26] + out_channel*convIntB[27]]); \n" \
-    "              } \n" \
-    "            } \n" \
-    "          } \n" \
-    "        } \n" \
-    "        float bias_value = 0.0; \n" \
-    "        if (convIntB[38] > 0) { \n" \
-    "          bias_value = convFloatB[convIntB[36] + 2 + convIntB[37]+(out_channel*convIntB[28])]; \n" \
-    "        } \n" \
-    "        convFloatB[2 + convIntB[36] + convIntB[37] + convIntB[38] + out_channel*convIntB[32] + out_x*convIntB[33] + out_y*convIntB[34] + batch*convIntB[35]] = min(max(total + bias_value,convFloatB[0]),convFloatB[1]); \n" \
-    "      } \n" \
-    "  } \n" \
+    "#version 450  \n" \
+    "#extension GL_ARB_separate_shader_objects : enable  \n" \
+    "layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in;  \n" \
+    "layout(binding = 0) buffer floatBuffer {  \n" \
+    "    vec2 actMinMax;  \n" \
+    "    float convFloatB[];  \n" \
+    "};  \n" \
+    "layout(binding = 1) readonly buffer intBuffer {  \n" \
+    "int strideWidth;  \n" \
+    "int strideHeight;  \n" \
+    "int padWidth;  \n" \
+    "int padHeight;  \n" \
+    "int dimSizes[16];  \n" \
+    "int dimStrides[16];  \n" \
+    "int inSize;  \n" \
+    "int filterSize;  \n" \
+    "int biasSize;  \n" \
+    "};  \n" \
+    "void main() {  \n" \
+    "  int out_channel = int(gl_GlobalInvocationID.x);  \n" \
+    "  int out_y = int(gl_GlobalInvocationID.y);  \n" \
+    "  int out_x = int(gl_GlobalInvocationID.z);  \n" \
+    "  if((out_channel < dimSizes[7]) && (out_x < dimSizes[13]) && (out_y < dimSizes[14])) {  \n" \
+    "      for (int batch = 0; batch < dimSizes[3]; ++batch) {  \n" \
+    "        float total = 0.0;  \n" \
+    "        for (int filter_y = 0; filter_y < dimSizes[6]; ++filter_y) {  \n" \
+    "          for (int filter_x = 0; filter_x < dimSizes[5]; ++filter_x) {  \n" \
+    "            for (int in_channel = 0; in_channel < dimSizes[0]; ++in_channel) {  \n" \
+    "              int in_x = (out_x * strideWidth - padWidth) + filter_x;  \n" \
+    "              int in_y = (out_y * strideHeight - padHeight) + filter_y;  \n" \
+    "              if ((in_x >= 0) && (in_x < dimSizes[1]) && (in_y >= 0) &&  \n" \
+    "                  (in_y < dimSizes[2])) {  \n" \
+    "                total += (convFloatB[in_channel*dimStrides[0] + in_x*dimStrides[1] +in_y*dimStrides[2] + batch*dimStrides[3]] *   \n" \
+    "                        convFloatB[inSize + in_channel*dimStrides[4] + filter_x*dimStrides[5] + filter_y*dimStrides[6] + out_channel*dimStrides[7]]);  \n" \
+    "              }  \n" \
+    "            }  \n" \
+    "          }  \n" \
+    "        }  \n" \
+    "        float bias_value = 0.0;  \n" \
+    "        if (biasSize > 0) {  \n" \
+    "          bias_value = convFloatB[inSize + filterSize + (out_channel*dimStrides[8])];  \n" \
+    "        }  \n" \
+    "        vec2 actMinMax0 = actMinMax; \n" \
+    "        convFloatB[inSize + filterSize + biasSize + out_channel*dimStrides[12] + out_x*dimStrides[13] + out_y*dimStrides[14] + batch*dimStrides[15]] = min(max(total + bias_value,actMinMax0.x),actMinMax0.y);  \n" \
+    "      }  \n" \
+    "  }  \n" \
     "}";
 
     shaderc::Compiler compiler;
@@ -1064,30 +1009,136 @@ void createConvPipeline() {
 }
 
 void createMatmulPipeline() {
+    // std::string source =
+    //   "#version 450 \n" \
+    //   "#extension GL_ARB_separate_shader_objects : enable \n" \
+    //   "layout(local_size_x = 32, local_size_y = 8, local_size_z = 1) in; \n" \
+    //   "layout(binding = 0) buffer matrixA { \n" \
+    //   "    vec4 aA[]; \n" \
+    //   "}; \n" \
+    //   "void main() { \n" \
+    //   "    int row = int(gl_GlobalInvocationID.x)*4; \n" \
+    //   "    int col = int(gl_GlobalInvocationID.y); \n" \
+    //   "    vec4 mk = aA[0];  \n" \
+    //   "    int mM = int(mk.x);  \n" \
+    //   "    int kK = int(mk.y);  \n" \
+    //   "    int nN = int(mk.z);  \n" \
+    //   "    if ((row < mM) && (col < nN)) { \n" \
+    //   "        vec4 sum = {0.0, 0.0, 0.0, 0.0}; \n" \
+    //   "        for(int i = 1; i <= kK/4; i++){ \n" \
+    //   "            vec4 currb = aA[(mM*kK/4) + i];\n" \
+    //   "            sum.x += dot(aA[(row*kK/4) + i],currb);\n" \
+    //   "            sum.y += dot(aA[((row+1)*kK/4) + i],currb); \n" \
+    //   "            sum.z += dot(aA[((row+2)*kK/4) + i],currb);\n" \
+    //   "            sum.w += dot(aA[((row+3)*kK/4) + i],currb);\n" \
+    //   "        } \n" \
+    //   "        aA[1 + (mM*kK/4) + (kK/4) + (row/4)] = sum; \n" \
+    //   "    } \n" \
+    //   "}";
+
     std::string source =
       "#version 450 \n" \
       "#extension GL_ARB_separate_shader_objects : enable \n" \
-      "layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in; \n" \
+      "layout(local_size_x = 8, local_size_y = 32, local_size_z = 1) in; \n" \
       "layout(binding = 0) buffer matrixA { \n" \
+      "    int mM; \n" \
+      "    int kK; \n" \
+      "    int nN; \n" \
+      "    int tmp; \n" \
       "    vec4 aA[]; \n" \
       "}; \n" \
+      "shared vec4 Acc[32]; \n" \
       "void main() { \n" \
       "    int row = int(gl_GlobalInvocationID.x)*4; \n" \
-      "    vec4 mk = aA[0];  \n" \
-      "    int mM = int(mk.x);  \n" \
-      "    int kK = int(mk.y);  \n" \
+      "    int localidx = int(gl_LocalInvocationID.y); \n" \
       "    if (row < mM) { \n" \
       "        vec4 sum = {0.0, 0.0, 0.0, 0.0}; \n" \
-      "        for(int i = 1; i <= kK/4; i++){ \n" \
+      "        for(int i = localidx; i < localidx+(kK/128); i++){ \n" \
       "            vec4 currb = aA[(mM*kK/4) + i];\n" \
       "            sum.x += dot(aA[(row*kK/4) + i],currb);\n" \
       "            sum.y += dot(aA[((row+1)*kK/4) + i],currb); \n" \
       "            sum.z += dot(aA[((row+2)*kK/4) + i],currb);\n" \
       "            sum.w += dot(aA[((row+3)*kK/4) + i],currb);\n" \
       "        } \n" \
-      "        aA[1 + (mM*kK/4) + (kK/4) + (row/4)] = sum; \n" \
+      "        Acc[localidx] = sum; \n" \
+      "        barrier();      \n" \
+      "        if(localidx == 0) { \n" \
+      "            vec4 total = {0.0, 0.0, 0.0, 0.0}; \n" \
+      "            for(int i = 0; i < 32; i++) { \n" \
+      "                total = total + Acc[i]; \n" \
+      "            } \n" \
+      "            aA[(mM*kK/4) + (kK/4) + (row/4)] = total; \n" \
+      "        } \n" \
       "    } \n" \
       "}";
+
+    // std::string source =
+    //   "#version 450   \n" \
+    //   "#extension GL_ARB_separate_shader_objects : enable   \n" \
+    //   "layout(local_size_x = 8, local_size_y = 32, local_size_z = 1) in;   \n" \
+    //   "layout(binding = 0) buffer matrixA {   \n" \
+    //   "    int M; \n" \
+    //   "    int K; \n" \
+    //   "    int N; \n" \
+    //   "    int tmp; \n" \
+    //   "    vec4 matrixAll[];   \n" \
+    //   "};   \n" \
+    //   "const int TS = 32;  \n" \
+    //   "const int WIDTH = 4;  \n" \
+    //   "shared vec4 Asub[TS][TS/WIDTH];       \n" \
+    //   "shared vec4 Bsub[TS][TS/WIDTH];  \n" \
+    //   "void main() {           \n" \
+    //   "    const int row = int(gl_LocalInvocationID.x);     \n" \
+    //   "    const int col = int(gl_LocalInvocationID.y);     \n" \
+    //   "    const int globalRow = (TS/WIDTH) * int(gl_WorkGroupID.x) + row;     \n" \
+    //   "    const int globalCol = TS * int(gl_WorkGroupID.y) + col;      \n" \
+    //   "    vec4 acc = { 0.0, 0.0, 0.0, 0.0 };       \n" \
+    //   "    const int numTiles = K/TS;   \n" \
+    //   "    for (int t=0; t<numTiles; t++) {          \n" \
+    //   "        const int tiledRow = (TS/WIDTH)*t + row;       \n" \
+    //   "        const int tiledCol = TS*t + col;       \n" \
+    //   "        if(globalRow < (M/WIDTH)) {      \n" \
+    //   "          Asub[col][row] = matrixAll[tiledCol*(M/WIDTH) + globalRow];      \n" \
+    //   "        }       \n" \
+    //   "        else {      \n" \
+    //   "           vec4 tmp = { 0.0, 0.0, 0.0, 0.0 };   \n" \
+    //   "           Asub[col][row] = tmp;      \n" \
+    //   "        }      \n" \
+    //   "        if(globalCol < N) {      \n" \
+    //   "          Bsub[col][row] = matrixAll[(M*K/4) + globalCol*(K/WIDTH) + tiledRow];      \n" \
+    //   "        }       \n" \
+    //   "        else {      \n" \
+    //   "           vec4 tmp = { 0.0, 0.0, 0.0, 0.0 };   \n" \
+    //   "           Bsub[col][row] = tmp;      \n" \
+    //   "        }      \n" \
+    //   "        barrier();       \n" \
+    //   "        if(globalCol < N) {  \n" \
+    //   "          vec4 vecA;  \n" \
+    //   "          vec4 vecB;       \n" \
+    //   "          float valB;       \n" \
+    //   "          for (int k=0; k<TS/WIDTH; k++) {       \n" \
+    //   "              vecB = Bsub[col][k];       \n" \
+    //   "              for (int w=0; w<WIDTH; w++) {       \n" \
+    //   "                  vecA = Asub[WIDTH*k + w][row];       \n" \
+    //   "                  switch (w) {       \n" \
+    //   "                      case 0: valB = vecB.x; break;       \n" \
+    //   "                      case 1: valB = vecB.y; break;       \n" \
+    //   "                      case 2: valB = vecB.z; break;       \n" \
+    //   "                      case 3: valB = vecB.w; break;       \n" \
+    //   "                  }       \n" \
+    //   "                  acc.x += vecA.x * valB;       \n" \
+    //   "                  acc.y += vecA.y * valB;       \n" \
+    //   "                  acc.z += vecA.z * valB;       \n" \
+    //   "                  acc.w += vecA.w * valB;       \n" \
+    //   "              }      \n" \
+    //   "          }       \n" \
+    //   "        }       \n" \
+    //   "        barrier();       \n" \
+    //   "    }              \n" \
+    //   "    if((globalCol < N) && (globalRow < (M/WIDTH))) {         \n" \
+    //   "      matrixAll[(M*K/4) + (K*N/4) + globalCol*(M/WIDTH) + globalRow] = acc;      \n" \
+    //   "    }           \n" \
+    //   "}";
 
     shaderc::Compiler compiler;
     shaderc::CompileOptions options;
