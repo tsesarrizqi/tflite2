@@ -127,7 +127,8 @@ const char *kernelSource =           "\n" \
 "    __local float4 Aacc[32]; \n" \
 "    if (row < m_rows) { \n" \
 "        float4 sum = {0.0, 0.0, 0.0, 0.0}; \n" \
-"        for(int i = localidx; i < localidx+(m_cols/128); i++){ \n" \
+"        int starti = localidx*(m_cols/128); \n" \
+"        for(int i = starti; i < starti+(m_cols/128); i++){ \n" \
 "            float4 currb = vector[i];\n" \
 "            sum.x += dot(matrix[(row*m_cols/4) + i],currb);\n" \
 "            sum.y += dot(matrix[((row+1)*m_cols/4) + i],currb); \n" \
@@ -137,11 +138,10 @@ const char *kernelSource =           "\n" \
 "        Aacc[localidx] = sum; \n" \
 "        barrier(CLK_LOCAL_MEM_FENCE);      \n" \
 "        if(localidx == 0) { \n" \
-"            float4 total = {0.0, 0.0, 0.0, 0.0}; \n" \
-"            for(int i = 0; i < 32; i++) { \n" \
-"                total = total + Aacc[i]; \n" \
-"            } \n" \
-"            result[row/4] = total; \n" \
+"            result[row/4] = Aacc[0] + Aacc[1] + Aacc[2] + Aacc[3] + Aacc[4] + Aacc[5] + Aacc[6] + Aacc[7]+ \n" \
+"            Aacc[8] + Aacc[9] + Aacc[10] + Aacc[11] + Aacc[12] + Aacc[13] + Aacc[14] + Aacc[15]+ \n" \
+"            Aacc[16] + Aacc[17] + Aacc[18] + Aacc[19] + Aacc[20] + Aacc[21] + Aacc[22] + Aacc[23]+ \n" \
+"            Aacc[24] + Aacc[25] + Aacc[26] + Aacc[27] + Aacc[28] + Aacc[29] + Aacc[30] + Aacc[31]; \n" \
 "        } \n" \
 "    } \n" \
 "} \n" \
@@ -1053,7 +1053,8 @@ void createMatmulPipeline() {
       "    int localidx = int(gl_LocalInvocationID.y); \n" \
       "    if (row < mM) { \n" \
       "        vec4 sum = {0.0, 0.0, 0.0, 0.0}; \n" \
-      "        for(int i = localidx; i < localidx+(kK/128); i++){ \n" \
+      "        int starti = localidx*(kK/128); \n" \
+      "        for(int i = starti; i < starti+(kK/128); i++) { \n" \
       "            vec4 currb = aA[(mM*kK/4) + i];\n" \
       "            sum.x += dot(aA[(row*kK/4) + i],currb);\n" \
       "            sum.y += dot(aA[((row+1)*kK/4) + i],currb); \n" \
@@ -1063,11 +1064,10 @@ void createMatmulPipeline() {
       "        Acc[localidx] = sum; \n" \
       "        barrier();      \n" \
       "        if(localidx == 0) { \n" \
-      "            vec4 total = {0.0, 0.0, 0.0, 0.0}; \n" \
-      "            for(int i = 0; i < 32; i++) { \n" \
-      "                total = total + Acc[i]; \n" \
-      "            } \n" \
-      "            aA[(mM*kK/4) + (kK/4) + (row/4)] = total; \n" \
+      "            aA[(mM*kK/4) + (kK/4) + (row/4)] = Aacc[0] + Aacc[1] + Aacc[2] + Aacc[3] + Aacc[4] + Aacc[5] + Aacc[6] + Aacc[7]+ \n" \
+      "            Aacc[8] + Aacc[9] + Aacc[10] + Aacc[11] + Aacc[12] + Aacc[13] + Aacc[14] + Aacc[15]+ \n" \
+      "            Aacc[16] + Aacc[17] + Aacc[18] + Aacc[19] + Aacc[20] + Aacc[21] + Aacc[22] + Aacc[23]+ \n" \
+      "            Aacc[24] + Aacc[25] + Aacc[26] + Aacc[27] + Aacc[28] + Aacc[29] + Aacc[30] + Aacc[31]; \n" \
       "        } \n" \
       "    } \n" \
       "}";
