@@ -94,6 +94,8 @@ struct OpData {
   bool need_im2col;
 };
     
+static int buffsizes[4] = {0,0,0,0};
+
 cl_context context_cl_global = NULL;       
 cl_command_queue queue_global = NULL;
 cl_program program_global = NULL;
@@ -383,6 +385,22 @@ TfLiteStatus Prepare(TfLiteContext* context, TfLiteNode* node) {
   // Check input channels matching filter
   TF_LITE_ENSURE_EQ(context, input->dims->data[3], filter->dims->data[3]);
 
+  int input_size1 = input->dims->data[0]*input->dims->data[1]*input->dims->data[2]*input->dims->data[3];
+  int filter_size1 = filter->dims->data[0]*filter->dims->data[1]*filter->dims->data[2]*filter->dims->data[3];
+  int output_size1 = output->dims->data[0]*output->dims->data[1]*output->dims->data[2]*output->dims->data[3];
+
+  if(buffsizes[0] < input_size1) {
+    buffsizes[0] = input_size1;
+  }
+  if(buffsizes[1] < filter_size1) {
+    buffsizes[1] = filter_size1;
+  }
+  if(buffsizes[3] < output_size1) {
+    buffsizes[3] = output_size1;
+  }
+
+
+
   // Check types. (We assume that UINT8 refers to quantized tensors)
   TfLiteType data_type = input->type;
   TF_LITE_ENSURE(context,
@@ -396,6 +414,7 @@ TfLiteStatus Prepare(TfLiteContext* context, TfLiteNode* node) {
   // either change that or document that convolution requires it.
   TF_LITE_ENSURE(context, hasBias);
 
+  int bias_size = 0;
   if (hasBias) {
     bias = &context->tensors[node->inputs->data[2]];
     if (data_type == kTfLiteUInt8) {
@@ -404,9 +423,21 @@ TfLiteStatus Prepare(TfLiteContext* context, TfLiteNode* node) {
     } else {
       TF_LITE_ENSURE_EQ(context, bias->type, data_type);
     }
+
+    bias_size = bias->dims->data[0];
+    if(buffsizes[2] < bias_size) {
+      buffsizes[2] = bias_size;
+    }
+    
+
     TF_LITE_ENSURE_EQ(context, bias->dims->size, 1);
     TF_LITE_ENSURE_EQ(context, bias->dims->data[0], filter->dims->data[0]);
   }
+
+  __android_log_print(ANDROID_LOG_INFO, "VectorSize", "inputSizeconv.cc: %d",buffsizes[0]);
+  __android_log_print(ANDROID_LOG_INFO, "VectorSize", "filterSizeconv.cc: %d",buffsizes[1]);
+  __android_log_print(ANDROID_LOG_INFO, "VectorSize", "biasSizeconv.cc: %d",buffsizes[2]);
+  __android_log_print(ANDROID_LOG_INFO, "VectorSize", "outputSizeconv.cc: %d",buffsizes[3]);
 
   int channels_out = filter->dims->data[0];
   int width = input->dims->data[2];
@@ -606,25 +637,25 @@ void EvalFloat(TfLiteContext* context, TfLiteNode* node,
     }
     //note: andoird log
     // // __android_log_print(ANDROID_LOG_INFO, "Convcc", "multithread conv");
-    multithreaded_ops::Conv(
-        GetTensorData<float>(input), GetTensorDims(input), filter_data,
-        GetTensorDims(filter), GetTensorData<float>(bias), GetTensorDims(bias),
-        params->stride_width, params->stride_height, data->padding.width,
-        data->padding.height, params->padding, output_activation_min,
-        output_activation_max, GetTensorData<float>(output),
-        GetTensorDims(output), GetTensorData<float>(im2col),
-        GetTensorDims(im2col));
-    // multithreaded_ops::ConvOpenCL(
+    // multithreaded_ops::Conv(
     //     GetTensorData<float>(input), GetTensorDims(input), filter_data,
     //     GetTensorDims(filter), GetTensorData<float>(bias), GetTensorDims(bias),
     //     params->stride_width, params->stride_height, data->padding.width,
     //     data->padding.height, params->padding, output_activation_min,
     //     output_activation_max, GetTensorData<float>(output),
     //     GetTensorDims(output), GetTensorData<float>(im2col),
-    //     GetTensorDims(im2col),
-    //     context_cl_global, queue_global, program_global,
-    //     physicalDevice_global, device_global, pipelineConv_global, pipelineMatmul_global, pipelineLayoutConv_global, 
-    //     pipelineLayoutMatmul_global, descriptorSetLayoutConv_global, descriptorSetLayoutMatmul_global, queueV_global, queueFamilyIndex_global);
+    //     GetTensorDims(im2col));
+    multithreaded_ops::ConvOpenCL(
+        GetTensorData<float>(input), GetTensorDims(input), filter_data,
+        GetTensorDims(filter), GetTensorData<float>(bias), GetTensorDims(bias),
+        params->stride_width, params->stride_height, data->padding.width,
+        data->padding.height, params->padding, output_activation_min,
+        output_activation_max, GetTensorData<float>(output),
+        GetTensorDims(output), GetTensorData<float>(im2col),
+        GetTensorDims(im2col),
+        context_cl_global, queue_global, program_global, buffsizes,
+        physicalDevice_global, device_global, pipelineConv_global, pipelineMatmul_global, pipelineLayoutConv_global, 
+        pipelineLayoutMatmul_global, descriptorSetLayoutConv_global, descriptorSetLayoutMatmul_global, queueV_global, queueFamilyIndex_global);
     
   }
 }

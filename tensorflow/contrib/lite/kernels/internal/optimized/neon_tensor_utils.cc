@@ -19,8 +19,8 @@ limitations under the License.
 #include "tensorflow/contrib/lite/kernels/activation_functor.h"
 #include "tensorflow/contrib/lite/kernels/internal/optimized/tensor_utils_impl.h"
 
-// clblast
-#include <clblast.h>
+// // clblast
+// #include <clblast.h>
 
 #include <string>
 #include <cstring>
@@ -126,7 +126,7 @@ void transpose_block(const float *A, float *B, const int n, const int m, const i
 
 using half_float::half;
 using half_float::half_cast;
-using namespace clblast;
+// using namespace clblast;
 
 // void OpenCLPortableMatrixBatchVectorMultiplyAccumulate(const float* matrix,
 //                                                  int m_rows, int m_cols,
@@ -135,38 +135,53 @@ using namespace clblast;
 //                                                  int result_stride,
 //                                                  cl_context context, cl_command_queue queue, cl_program program) {
 
-//   int matrixsize = m_rows*m_cols*sizeof(cl_half);
-//   int vectorsize = m_cols*n_batch*sizeof(cl_half);
-//   int resultsize = m_rows*n_batch*sizeof(cl_half);
+//   int matrixsize = m_rows*m_cols*sizeof(half);
+//   int vectorsize = m_cols*n_batch*sizeof(half);
+//   int resultsize = m_rows*n_batch*sizeof(half);
 
 //   // Test half precision
-//   cl_half* matrixHalf = (cl_half*) malloc(m_rows*m_cols*sizeof(cl_half));
+//   float tessum = 0;
+//   half* matrixHalf = (half*) malloc(matrixsize);
 //   for(int i = 0; i < m_rows*m_cols; i++) {
 //     // half halfTmp(matrix[i]);
-//     matrixHalf[i] = half_cast<half>(matrix[i]);
+//     matrixHalf[i] = half_cast<half,std::round_toward_zero>(matrix[i]);
+//     tessum += (float)matrixHalf[i];
 //   }
-//   cl_half* vectorHalf = (cl_half*) malloc(m_cols*n_batch*sizeof(cl_half));
+//   half coba = half_cast<half,std::round_toward_zero>(741771.187500);
+//   __android_log_print(ANDROID_LOG_INFO, "Matmulruntime", "tessumcoba: %lf", (float) coba);
+//   __android_log_print(ANDROID_LOG_INFO, "Matmulruntime", "tessummatrix: %lf", (float) tessum);
+//   tessum = 0;
+//   float tessumfloat = 0.0;
+//   half* vectorHalf = (half*) malloc(vectorsize);
 //   for(int i = 0; i < m_cols*n_batch; i++) {
 //     // half halfTmp(vector[i]);
-//     vectorHalf[i] = half_cast<half>(vector[i]);
+//     vectorHalf[i] = half_cast<half,std::round_toward_zero>(vector[i]);
+//     if(isinf((float)vectorHalf[i])) {
+//       __android_log_print(ANDROID_LOG_INFO, "Matmulruntime", "tessumadaelemeninf: %lf", (float) vectorHalf[i]);
+//       __android_log_print(ANDROID_LOG_INFO, "Matmulruntime", "tessumadaelemeninfaslinya: %lf", (float) vector[i]);
+//     }
+//     tessum += (float)vectorHalf[i];
+//     tessumfloat += vector[i];
 //   }
-//   cl_half* resultHalf = (cl_half*) malloc(m_rows*n_batch*sizeof(cl_half));
+//   __android_log_print(ANDROID_LOG_INFO, "Matmulruntime", "tessumvector: %lf", (float) tessum);
+//   __android_log_print(ANDROID_LOG_INFO, "Matmulruntime", "tessumvectorfloat: %lf", tessumfloat);
+//   half* resultHalf = (half*) malloc(resultsize);
 
 //   cl_mem d_a;
-//   cl_mem d_at;
+//   // cl_mem d_at;
 //   cl_mem d_b;
 //   cl_mem d_c;
       
-//   cl_kernel kernel, kernel2;
+//   cl_kernel kernel;
 
-//   size_t localSizetmp;
+//   // size_t localSizetmp;
 //   cl_int err;
 
 //   double wall0 = get_wall_time();
 //   double cpu0  = get_cpu_time();
 
-//   kernel = clCreateKernel(program, "matrixVectorMul", &err);
-//   kernel2 = clCreateKernel(program, "transpose", &err);
+//   kernel = clCreateKernel(program, "matrixVectorMulF4", &err);
+//   // kernel2 = clCreateKernel(program, "transpose", &err);
 
 //   double wall1 = get_wall_time();
 //   double cpu1  = get_cpu_time();
@@ -183,7 +198,7 @@ using namespace clblast;
 //   d_a = clCreateBuffer(context, CL_MEM_READ_ONLY, matrixsize, NULL, NULL);
 //   d_b = clCreateBuffer(context, CL_MEM_READ_ONLY, vectorsize, NULL, NULL);
 //   d_c = clCreateBuffer(context, CL_MEM_WRITE_ONLY, resultsize, NULL, NULL);
-//   d_at = clCreateBuffer(context, CL_MEM_READ_WRITE, matrixsize, NULL, NULL);
+//   // d_at = clCreateBuffer(context, CL_MEM_READ_WRITE, matrixsize, NULL, NULL);
 
 //   wall1 = get_wall_time();
 //   cpu1  = get_cpu_time();
@@ -198,9 +213,9 @@ using namespace clblast;
 //   cpu0  = get_cpu_time();
 
 //   err = clEnqueueWriteBuffer(queue, d_a, CL_TRUE, 0,
-//                                  m_rows*m_cols*sizeof(cl_half), matrixHalf, 0, NULL, NULL);
+//                                  matrixsize, matrixHalf, 0, NULL, NULL);
 //   err = clEnqueueWriteBuffer(queue, d_b, CL_TRUE, 0,
-//                                  m_cols*n_batch*sizeof(cl_half), vectorHalf, 0, NULL, NULL);
+//                                  vectorsize, vectorHalf, 0, NULL, NULL);
 
 //   // cl_float *host_a = (cl_float*)clEnqueueMapBuffer(
 //   //             queue,
@@ -236,16 +251,16 @@ using namespace clblast;
 //   __android_log_print(ANDROID_LOG_INFO, "Matmulruntime", "writebuffer: %lf", wall);
 
 //   err  = clSetKernelArg(kernel, 0, sizeof(cl_mem), &d_c);
-//   err  = clSetKernelArg(kernel, 1, sizeof(cl_mem), &d_at);
+//   err  = clSetKernelArg(kernel, 1, sizeof(cl_mem), &d_a);
 //   err  = clSetKernelArg(kernel, 2, sizeof(cl_mem), &d_b);
 //   err  = clSetKernelArg(kernel, 3, sizeof(int), &m_cols);
 //   err  = clSetKernelArg(kernel, 4, sizeof(int), &m_rows);
 //   err  = clSetKernelArg(kernel, 5, sizeof(int), &n_batch);
 
-//   err  = clSetKernelArg(kernel2, 0, sizeof(cl_mem), &d_a);
-//   err  = clSetKernelArg(kernel2, 1, sizeof(cl_mem), &d_at);
-//   err  = clSetKernelArg(kernel2, 2, sizeof(int), &m_rows);
-//   err  = clSetKernelArg(kernel2, 3, sizeof(int), &m_cols);
+//   // err  = clSetKernelArg(kernel2, 0, sizeof(cl_mem), &d_a);
+//   // err  = clSetKernelArg(kernel2, 1, sizeof(cl_mem), &d_at);
+//   // err  = clSetKernelArg(kernel2, 2, sizeof(int), &m_rows);
+//   // err  = clSetKernelArg(kernel2, 3, sizeof(int), &m_cols);
 
 //   const int TS = 32;
 //   // const size_t localSize = (size_t)TS;
@@ -264,20 +279,19 @@ using namespace clblast;
 //   // const size_t local[2] = { (size_t) TS, (size_t) (TS/8) };
 //   // const size_t global[2] = { (size_t) (((m_rows-1)/32+1)*32), (size_t) (((n_batch-1)/32+1)*4) };
 
+//   // const size_t local[2] = { 8, 32 };
+//   // const size_t global[2] = { (size_t) (((m_rows-1)/8+1)*8), 32 };
+//   // const size_t local2[2] = { 8, 32 };
+//   // const size_t global2[2] = { (size_t) (((m_rows-1)/8+1)*8), (size_t) (m_cols/4) };
+
 //   const size_t local[2] = { 8, 32 };
-//   const size_t global[2] = { (size_t) (((m_rows-1)/8+1)*8), 32 };
-//   const size_t local2[2] = { 8, 32 };
-//   const size_t global2[2] = { (size_t) (((m_rows-1)/8+1)*8), (size_t) (m_cols/4) };
+//   const size_t global[2] = { (size_t) (((m_rows/4-1)/8+1)*8), 32 };
 
 //   // const size_t local2[2] = { 16, 16 };
 //   // const size_t global2[2] = { (size_t) m_cols, (size_t) m_rows };
 
 //   wall0 = get_wall_time();
 //   cpu0  = get_cpu_time();
-
-//   err = clEnqueueNDRangeKernel(queue, kernel2, 2, NULL, global2, local2, 0, NULL, NULL);
-
-//   __android_log_print(ANDROID_LOG_INFO, "Matmulruntime", "Matmulerror2 %d", err);
 
 //   err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global, local, 0, NULL, NULL);
 
@@ -300,9 +314,9 @@ using namespace clblast;
 
 //   clFinish(queue);
 
-//   half halfTmp2 = half_cast<half>(matrix[0]);
+//   // half halfTmp2 = half_cast<half>(matrix[0]);
 //   for(int i = 0; i < m_rows*n_batch; i++) {
-//     result[i] = (float) halfTmp2;
+//     result[i] = (float) resultHalf[i];
 //   }
 
 //   wall1 = get_wall_time();
@@ -316,6 +330,9 @@ using namespace clblast;
 //   wall0 = get_wall_time();
 //   cpu0  = get_cpu_time();
 
+//   free(matrixHalf);
+//   free(vectorHalf);
+//   free(resultHalf);
 //   clReleaseMemObject(d_a);
 //   clReleaseMemObject(d_b);
 //   clReleaseMemObject(d_c);
@@ -331,9 +348,9 @@ using namespace clblast;
 
 // }
 
-void OpenCLPortableMatrixBatchVectorMultiplyAccumulate(float* matrix,
+void OpenCLPortableMatrixBatchVectorMultiplyAccumulate(const float* matrix,
                                                  int m_rows, int m_cols,
-                                                 float* vector,
+                                                 const float* vector,
                                                  int n_batch, float* result,
                                                  int result_stride,
                                                  cl_context context, cl_command_queue queue, cl_program program) {
@@ -351,7 +368,7 @@ void OpenCLPortableMatrixBatchVectorMultiplyAccumulate(float* matrix,
   double wall0 = get_wall_time();
   double cpu0  = get_cpu_time();
 
-  kernel = clCreateKernel(program, "matrixVectorMulF4", &err);
+  kernel = clCreateKernel(program, "matrixVectorMulF4float", &err);
 
   double wall1 = get_wall_time();
   double cpu1  = get_cpu_time();
@@ -365,8 +382,8 @@ void OpenCLPortableMatrixBatchVectorMultiplyAccumulate(float* matrix,
   cpu0  = get_cpu_time();
 
   // | CL_MEM_ALLOC_HOST_PTR
-  d_a = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, matrixsize, matrix, NULL);
-  d_b = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, vectorsize, vector, NULL);
+  d_a = clCreateBuffer(context, CL_MEM_READ_ONLY, matrixsize, NULL, NULL);
+  d_b = clCreateBuffer(context, CL_MEM_READ_ONLY, vectorsize, NULL, NULL);
   d_c = clCreateBuffer(context, CL_MEM_WRITE_ONLY, resultsize, NULL, NULL);
 
   wall1 = get_wall_time();
@@ -378,23 +395,48 @@ void OpenCLPortableMatrixBatchVectorMultiplyAccumulate(float* matrix,
   __android_log_print(ANDROID_LOG_INFO, "Matmulruntime", "createbuffer: %lf", wall);
 
 
-  // wall0 = get_wall_time();
-  // cpu0  = get_cpu_time();
+  wall0 = get_wall_time();
+  cpu0  = get_cpu_time();
 
-  // err = clEnqueueWriteBuffer(queue, d_a, CL_TRUE, 0,
-  //                                matrixsize, matrix, 0, NULL, NULL);
-  // err = clEnqueueWriteBuffer(queue, d_b, CL_TRUE, 0,
-  //                               vectorsize, vector, 0, NULL, NULL);
+  err = clEnqueueWriteBuffer(queue, d_a, CL_TRUE, 0,
+                                 matrixsize, matrix, 0, NULL, NULL);
+  err = clEnqueueWriteBuffer(queue, d_b, CL_TRUE, 0,
+                                vectorsize, vector, 0, NULL, NULL);
+
+  // cl_float *host_a = (cl_float*)clEnqueueMapBuffer(
+  //             queue,
+  //             d_a,
+  //             CL_TRUE,
+  //             CL_MAP_WRITE,
+  //             0,
+  //             sizeof(float)*m_rows*m_cols,
+  //             0, NULL, NULL, NULL);
+  // cl_float *host_b = (cl_float*)clEnqueueMapBuffer(
+  //             queue,
+  //             d_b,
+  //             CL_TRUE,
+  //             CL_MAP_WRITE,
+  //             0,
+  //             sizeof(float)*m_cols*n_batch,
+  //             0, NULL, NULL, NULL);
 
   // clFinish(queue);
 
-  // wall1 = get_wall_time();
-  // cpu1  = get_cpu_time();
+  // std::memcpy(host_a, matrix, m_rows*m_cols*sizeof(float));
+  // std::memcpy(host_b, vector, m_cols*n_batch*sizeof(float));
 
-  // wall = wall1 - wall0;
-  // cpu = cpu1 - cpu0;
+  // clEnqueueUnmapMemObject(queue,d_a,(void *) host_a,0, NULL, NULL);
+  // clEnqueueUnmapMemObject(queue,d_b,(void *) host_b,0, NULL, NULL);
+
+  clFinish(queue);
+
+  wall1 = get_wall_time();
+  cpu1  = get_cpu_time();
+
+  wall = wall1 - wall0;
+  cpu = cpu1 - cpu0;
   
-  // __android_log_print(ANDROID_LOG_INFO, "Matmulruntime", "writebuffer: %lf", wall);
+  __android_log_print(ANDROID_LOG_INFO, "Matmulruntime", "writebuffer: %lf", wall);
 
   err  = clSetKernelArg(kernel, 0, sizeof(cl_mem), &d_c);
   err  = clSetKernelArg(kernel, 1, sizeof(cl_mem), &d_a);
@@ -1211,9 +1253,9 @@ void vulkanTest(const float* matrixA, const float* matrixB, float* matrixC, int 
       physicalDevice, device, pipelineMatmul, pipelineLayoutMatmul, descriptorSetLayoutMatmul, queueV, queueFamilyIndex);
 }
 
-void clBlastOpenCL() {
+// void clBlastOpenCL() {
 
-}
+// }
 
 void NeonMatrixBatchVectorMultiplyAccumulateOpenCL(const float* matrix, int m_rows,
                                              int m_cols, const float* vector,
@@ -1337,18 +1379,18 @@ void NeonMatrixBatchVectorMultiplyAccumulateOpenCL(const float* matrix, int m_ro
 
 // PortableMatrixBatchVectorMultiplyAccumulate(matrix,m_rows,m_cols,vector,n_batch,result,1);
 
-m_cols = 2048;
-m_rows = 1008;
-float* matA = (float*) malloc(m_cols*m_rows*sizeof(float));
-float* matB = (float*) malloc(m_cols*sizeof(float));
-float* matC = (float*) malloc(m_rows*sizeof(float));
+// m_cols = 2048;
+// m_rows = 1008;
+// float* matA = (float*) malloc(m_cols*m_rows*sizeof(float));
+// float* matB = (float*) malloc(m_cols*sizeof(float));
+// float* matC = (float*) malloc(m_rows*sizeof(float));
 
-for(int i = 0; i < m_cols*m_rows; i++) {
-  matA[i] = 1;
-}
-for(int i = 0; i < m_cols; i++) {
-  matB[i] = 1;
-}
+// for(int i = 0; i < m_cols*m_rows; i++) {
+//   matA[i] = 1.234567;
+// }
+// for(int i = 0; i < m_cols; i++) {
+//   matB[i] = 1.234567;
+// }
 
 // // Start Timers
 // double wall0 = get_wall_time();
@@ -1461,46 +1503,60 @@ for(int i = 0; i < m_cols; i++) {
 // double wall0 = get_wall_time();
 // double cpu0  = get_cpu_time();
 
-float* resultport = (float*) malloc(m_rows*n_batch*sizeof(float));
-float* resultocl = (float*) malloc(m_rows*n_batch*sizeof(float));
+// float* resultport = (float*) malloc(m_rows*n_batch*sizeof(float));
+// float* resultocl = (float*) malloc(m_rows*n_batch*sizeof(float));
 
-PortableMatrixBatchVectorMultiplyAccumulate(matA,m_rows,m_cols,matB,n_batch,resultport,1);
+// // Start Timers
+// double wall0 = get_wall_time();
+// double cpu0  = get_cpu_time();
 
-sleep(1);
+// PortableMatrixBatchVectorMultiplyAccumulate(matrix,m_rows,m_cols,vector,n_batch,resultport,1);
+
+// double wall1 = get_wall_time();
+// double cpu1  = get_cpu_time();
+
+// double wall = wall1 - wall0;
+// double cpu = cpu1 - cpu0;
+
+// // note: andoird log
+// __android_log_print(ANDROID_LOG_INFO, "MatmulResult", "runkernelProtable: %lf", wall);
+
+// sleep(1);
 
 // Start Timers
-double wall0 = get_wall_time();
-double cpu0  = get_cpu_time();
+// double wall0 = get_wall_time();
+// double cpu0  = get_cpu_time();
 
-OpenCLPortableMatrixBatchVectorMultiplyAccumulate(matA,m_rows,m_cols,matB,n_batch,resultocl,1, context_cl, queue, program);
+OpenCLPortableMatrixBatchVectorMultiplyAccumulate(matrix,m_rows,m_cols,vector,n_batch,result,1, context_cl, queue, program);
 
-// vulkanTest(matA, matB, resultocl, m_rows, m_cols, n_batch,
+// vulkanTest(matrix, vector, result, m_rows, m_cols, n_batch,
 //   physicalDevice, device, pipelineMatmul, pipelineLayoutMatmul, 
 //   descriptorSetLayoutMatmul, queueV, queueFamilyIndex);
 
-double wall1 = get_wall_time();
-double cpu1  = get_cpu_time();
+// double wall1 = get_wall_time();
+// double cpu1  = get_cpu_time();
 
-double wall = wall1 - wall0;
-double cpu = cpu1 - cpu0;
+// double wall = wall1 - wall0;
+// double cpu = cpu1 - cpu0;
 
-// note: andoird log
-__android_log_print(ANDROID_LOG_INFO, "MatmulHalfResult", "runkerneltotal: %lf", wall);
+// // note: andoird log
+// __android_log_print(ANDROID_LOG_INFO, "MatmulResult", "runkerneltotal: %lf", wall);
 
-double sum = 0.0;
-for(int i = 0; i < m_rows*n_batch; i++) {
-    sum += resultport[i];
-    // __android_log_print(ANDROID_LOG_INFO, "MatmulHalfResult", "%d: %f", i, matC[i]);
-}
-__android_log_print(ANDROID_LOG_INFO, "MatmulResult", "Resultmatmulport: %lf", sum);
+// double sum = 0.0;
+// for(int i = 0; i < m_rows*n_batch; i++) {
+//     sum += resultport[i];
+//     // __android_log_print(ANDROID_LOG_INFO, "MatmulHalfResult", "%d: %f", i, matC[i]);
+// }
+// __android_log_print(ANDROID_LOG_INFO, "MatmulResult", "Resultmatmulport: %lf", sum);
 
-sum = 0.0;
-for(int i = 0; i < m_rows*n_batch; i++) {
-    sum += resultocl[i];
-    // __android_log_print(ANDROID_LOG_INFO, "MatmulHalfResult", "%d: %f", i, matC[i]);
-}
+// sum = 0.0;
+// for(int i = 0; i < m_rows*n_batch; i++) {
+//     sum += resultocl[i];
+//     // if(i < 200)
+//     // __android_log_print(ANDROID_LOG_INFO, "MatmulResult", "%d: %lf", i, resultocl[i]);
+// }
 
-__android_log_print(ANDROID_LOG_INFO, "MatmulResult", "Resultmatmulocl: %lf", sum);
+// __android_log_print(ANDROID_LOG_INFO, "MatmulResult", "Resultmatmulocl: %lf", sum);
 
 // // Stop timers
 // double wall1 = get_wall_time();

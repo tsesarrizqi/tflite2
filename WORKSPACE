@@ -19,7 +19,7 @@ load("//tensorflow:workspace.bzl", "tf_workspace")
 # Uncomment and update the paths in these entries to build the Android demo.
 android_sdk_repository(
     name = "androidsdk",
-    api_level = 25,
+    api_level = 26,
     # Ensure that you have the build_tools_version below installed in the
     # SDK manager as it updates periodically.
     build_tools_version = "26.0.2",

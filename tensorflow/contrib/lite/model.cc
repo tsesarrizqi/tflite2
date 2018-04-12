@@ -62,6 +62,50 @@ limitations under the License.
 }
 
 const char *kernelSource =           "\n" \
+"#pragma OPENCL EXTENSION cl_khr_fp16 : enable \n" \
+"__kernel void convhalf(__global half* input_data,    \n" \
+"          __constant half* filter_data,    \n" \
+"          __global half* bias_data,    \n" \
+"          __global half* output_data,   \n" \
+"          int stride_width, int stride_height,    \n" \
+"          int pad_width, int pad_height,    \n" \
+"          __global int16* dim_sizes0, __global int16* dim_strides0,   \n" \
+"          half output_activation_min, half output_activation_max) {   \n" \
+"     \n" \
+"    int batchdepth = get_global_id(0);   \n" \
+"    int widthheight = get_global_id(1);   \n" \
+"    int16 dim_sizes = dim_sizes0[0];   \n" \
+"    int output_depth = dim_sizes.s7;  \n" \
+"    int output_height = dim_sizes.se;   \n" \
+"    int batch = batchdepth/output_depth;   \n" \
+"    int out_channel = batchdepth\%output_depth;   \n" \
+"    int out_x = widthheight/output_height;   \n" \
+"    int out_y = widthheight\%output_height;   \n" \
+"    if((batch < dim_sizes.s3) && (out_x < dim_sizes.sd) && (out_y < output_height) && (out_channel < output_depth)) {   \n" \
+"            int16 dim_strides = dim_strides0[0];   \n" \
+"            half total = 0.0;   \n" \
+"            for (int filter_y = 0; filter_y < dim_sizes.s6; ++filter_y) {   \n" \
+"              for (int filter_x = 0; filter_x < dim_sizes.s5; ++filter_x) {   \n" \
+"                for (int in_channel = 0; in_channel < dim_sizes.s0; ++in_channel) {   \n" \
+"                  int in_x = (out_x * stride_width) - pad_width + filter_x;   \n" \
+"                  int in_y = (out_y * stride_height) - pad_height + filter_y;   \n" \
+"                  if ((in_x >= 0) && (in_x < dim_sizes.s1) && (in_y >= 0) &&   \n" \
+"                      (in_y < dim_sizes.s2)) {   \n" \
+"                    half input_value = input_data[in_channel*dim_strides.s0 + in_x*dim_strides.s1 + in_y*dim_strides.s2 + batch*dim_strides.s3];   \n" \
+"                    half filter_value = filter_data[in_channel*dim_strides.s4 + filter_x*dim_strides.s5 + filter_y*dim_strides.s6 + out_channel*dim_strides.s7];  \n" \
+"                    total += (input_value * filter_value);   \n" \
+"                  }   \n" \
+"                }   \n" \
+"              }   \n" \
+"            }   \n" \
+"            half bias_value = 0.0;   \n" \
+"            if (bias_data) {   \n" \
+"              bias_value = bias_data[out_channel*dim_strides.s8];   \n" \
+"            } \n" \
+"            output_data[out_channel*dim_strides.sc + out_x*dim_strides.sd + out_y*dim_strides.se + batch*dim_strides.sf] = min(max(total + bias_value, output_activation_min), output_activation_max); \n" \
+"    }  \n" \
+"}   \n" \
+"  \n" \
 "__kernel void conv(__global float* input_data,    \n" \
 "          __constant float* filter_data,    \n" \
 "          __global float* bias_data,    \n" \
@@ -80,7 +124,7 @@ const char *kernelSource =           "\n" \
 "    int out_channel = batchdepth\%output_depth;   \n" \
 "    int out_x = widthheight/output_height;   \n" \
 "    int out_y = widthheight\%output_height;   \n" \
-"    if((batch < dim_sizes.s3) && (out_x < dim_sizes.sd) && (out_y < output_height) && (out_channel < output_depth/2)) {   \n" \
+"    if((batch < dim_sizes.s3) && (out_x < dim_sizes.sd) && (out_y < output_height) && (out_channel < output_depth)) {   \n" \
 "            int16 dim_strides = dim_strides0[0];   \n" \
 "            float total = 0.0;   \n" \
 "            for (int filter_y = 0; filter_y < dim_sizes.s6; ++filter_y) {   \n" \
@@ -104,7 +148,6 @@ const char *kernelSource =           "\n" \
 "            output_data[out_channel*dim_strides.sc + out_x*dim_strides.sd + out_y*dim_strides.se + batch*dim_strides.sf] = min(max(total + bias_value, output_activation_min), output_activation_max); \n" \
 "    }  \n" \
 "}   \n" \
-"  \n" \
 "__kernel void transpose(__global float4* input, __global float* output,\n" \
 "    int rows, int cols) {         \n" \
 "   int row = get_global_id(0);                                      \n" \
@@ -115,7 +158,37 @@ const char *kernelSource =           "\n" \
 "   output[(col4*4+2)*rows + row] = in_value.z;\n" \
 "   output[(col4*4+3)*rows + row] = in_value.w;\n" \
 "}      \n" \
-"__kernel void matrixVectorMulF4(__global float4* result,    \n" \
+"__kernel void matrixVectorMulF4(__global half4* result,    \n" \
+"    const __global half4* matrix,    \n" \
+"    const __global half4* vector,     \n" \
+"    int m_cols,    \n" \
+"    int m_rows,    \n" \
+"    int n_batch)    \n" \
+"{  \n" \
+"    int row = get_global_id(0)*4; \n" \
+"    int localidx = get_local_id(1); \n" \
+"    __local half4 Aacc[32]; \n" \
+"    if (row < m_rows) { \n" \
+"        half4 sum = {0.0, 0.0, 0.0, 0.0}; \n" \
+"        int starti = localidx*(m_cols/128); \n" \
+"        for(int i = starti; i < starti+(m_cols/128); i++){ \n" \
+"            half4 currb = vector[i];\n" \
+"            sum.x += dot(matrix[(row*m_cols/4) + i],currb);\n" \
+"            sum.y += dot(matrix[((row+1)*m_cols/4) + i],currb); \n" \
+"            sum.z += dot(matrix[((row+2)*m_cols/4) + i],currb);\n" \
+"            sum.w += dot(matrix[((row+3)*m_cols/4) + i],currb);\n" \
+"        } \n" \
+"        Aacc[localidx] = sum; \n" \
+"        barrier(CLK_LOCAL_MEM_FENCE);      \n" \
+"        if(localidx == 0) { \n" \
+"            result[row/4] = Aacc[0] + Aacc[1] + Aacc[2] + Aacc[3] + Aacc[4] + Aacc[5] + Aacc[6] + Aacc[7]+ \n" \
+"            Aacc[8] + Aacc[9] + Aacc[10] + Aacc[11] + Aacc[12] + Aacc[13] + Aacc[14] + Aacc[15]+ \n" \
+"            Aacc[16] + Aacc[17] + Aacc[18] + Aacc[19] + Aacc[20] + Aacc[21] + Aacc[22] + Aacc[23]+ \n" \
+"            Aacc[24] + Aacc[25] + Aacc[26] + Aacc[27] + Aacc[28] + Aacc[29] + Aacc[30] + Aacc[31]; \n" \
+"        } \n" \
+"    } \n" \
+"} \n" \
+"__kernel void matrixVectorMulF4float(__global float4* result,    \n" \
 "    const __global float4* matrix,    \n" \
 "    const __global float4* vector,     \n" \
 "    int m_cols,    \n" \
@@ -154,6 +227,10 @@ cl_device_id device_id = NULL;
 cl_context context_cl = NULL;       
 cl_command_queue queueCL = NULL;
 cl_program program = NULL;
+
+//buffer sizes
+// int buffsizes[4] = {0,0,0,0};
+
 
 // device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, descriptorSetLayoutConv, descriptorSetLayoutMatmul, queue, queueFamilyIndex
 
@@ -784,7 +861,7 @@ void createInstance() {
     applicationInfo.applicationVersion = 0;
     applicationInfo.pEngineName = "Naive";
     applicationInfo.engineVersion = 0;
-    applicationInfo.apiVersion = VK_MAKE_VERSION(1, 0, 31);
+    applicationInfo.apiVersion = VK_MAKE_VERSION(1, 0, 65);
     
     VkInstanceCreateInfo createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -1270,6 +1347,10 @@ TfLiteStatus InterpreterBuilder::ParseNodes(
       //note: andoird log
       // __android_log_print(ANDROID_LOG_INFO, "Ngising", "code 25 benar");
       if (op->custom_options()) {
+        // std::vector<int> vectmp = FlatBufferIntArrayToVector(op->inputs());
+        // std::vector<int> vectmp2 = FlatBufferIntArrayToVector(op->outputs());
+        // __android_log_print(ANDROID_LOG_INFO, "VectorSize", "InputSizeModel.cc: %d, %d, %d", vectmp[0], vectmp[1], vectmp[2]);
+        // __android_log_print(ANDROID_LOG_INFO, "VectorSize", "OutputSizeModel.cc: %d", vectmp2[0]);
         interpreter->AddNodeWithParametersOpenCL(
             FlatBufferIntArrayToVector(op->inputs()),
             FlatBufferIntArrayToVector(op->outputs()),
@@ -1281,6 +1362,10 @@ TfLiteStatus InterpreterBuilder::ParseNodes(
       } else {
         //note: andoird log
         // __android_log_print(ANDROID_LOG_INFO, "Ngising", "addnodewithparam2");
+        // std::vector<int> vectmp = FlatBufferIntArrayToVector(op->inputs());
+        // std::vector<int> vectmp2 = FlatBufferIntArrayToVector(op->outputs());
+        // __android_log_print(ANDROID_LOG_INFO, "VectorSize", "InputSizeModel.cc: %d, %d, %d", vectmp[0], vectmp[1], vectmp[2]);
+        // __android_log_print(ANDROID_LOG_INFO, "VectorSize", "OutputSizeModel.cc: %d", vectmp[2]);
         interpreter->AddNodeWithParametersOpenCL(
             FlatBufferIntArrayToVector(op->inputs()),
             FlatBufferIntArrayToVector(op->outputs()), nullptr, 0,
@@ -1330,6 +1415,13 @@ TfLiteStatus InterpreterBuilder::ParseTensors(
   for (int i = 0; i < tensors->Length(); ++i) {
     const auto* tensor = tensors->Get(i);
     std::vector<int> dims = FlatBufferIntArrayToVector(tensor->shape());
+
+    // __android_log_print(ANDROID_LOG_INFO, "VectorSize", "Tensorname%d: %s", i, get_name(tensor));
+
+    for(int j = 0; j < dims.size(); j++) {
+      // __android_log_print(ANDROID_LOG_INFO, "VectorSize", "Tensordims%d: %d", i, dims[j]);
+    }
+    
 
     TfLiteQuantizationParams quantization;
     quantization.scale = 0;
