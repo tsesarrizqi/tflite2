@@ -302,12 +302,18 @@ inline double get_cpu_time(){
 }
 
 // static cl_mem d_all = NULL;
+static cl_kernel kernel = NULL;
 static cl_mem d_input = NULL;
 static cl_mem d_filter = NULL;
 static cl_mem d_bias = NULL;
 static cl_mem d_output = NULL;
 static cl_mem d_dim_sizes = NULL;
 static cl_mem d_dim_strides = NULL;
+static VkCommandPool commandPool = NULL;
+static VkCommandBuffer commandBuffer = NULL;
+static VkBuffer matrixA = NULL;
+static VkBuffer matrixSizes = NULL;
+static VkDeviceMemory bufferMemory = NULL;
 
 class VulkanConvolution {
 private:
@@ -317,14 +323,14 @@ private:
     VkPipeline pipeline;
     VkPipelineLayout pipelineLayout;
     VkShaderModule computeShaderModule;
-    VkCommandPool commandPool;
-    VkCommandBuffer commandBuffer;
+    // VkCommandPool commandPool;
+    // VkCommandBuffer commandBuffer;
     VkDescriptorPool descriptorPool;
     VkDescriptorSet descriptorSet;
     VkDescriptorSetLayout descriptorSetLayout;
-    VkBuffer matrixA, matrixB, matrixC, matrixSizes;
-    // VkDeviceMemory bufferMemorymatA, bufferMemorymatB, bufferMemorymatC, bufferMemoryS;
-    VkDeviceMemory bufferMemory;      
+    // VkBuffer matrixA, matrixB, matrixC, matrixSizes;
+    // // VkDeviceMemory bufferMemorymatA, bufferMemorymatB, bufferMemorymatC, bufferMemoryS;
+    // VkDeviceMemory bufferMemory;      
     uint32_t matrixASize, matrixBSize, matrixCSize, matrixSizesSize, inputSize, filterSize, biasSize, outputSize;
     VkQueue queue; 
     uint32_t queueFamilyIndex;
@@ -345,7 +351,7 @@ private:
     bool enableValidationLayers = true;
     
 public:
-    void run(const float* input_data, const int input_size,
+    void run(int buffsizes[4], const float* input_data, const int input_size,
           const float* filter_data, const int filter_size,
           const float* bias_data, const int bias_size,
           float* output_data, const int output_size,
@@ -364,11 +370,10 @@ public:
         queue = queueV0;
         queueFamilyIndex = queueFamilyIndex0;
 
-        matrixASize = (uint32_t) (sizeof(float) *dim_sizes[0]*dim_sizes[1]*dim_sizes[2]*dim_sizes[3]);
-        matrixBSize = (uint32_t) (sizeof(float) *((dim_sizes[4]*dim_sizes[5]*dim_sizes[6]*dim_sizes[7]) +
-            (dim_sizes[8]*dim_sizes[9]*dim_sizes[10]*dim_sizes[11]) + 2));
-        matrixCSize = (uint32_t) (sizeof(float) * dim_sizes[12]*dim_sizes[13]*dim_sizes[14]*dim_sizes[15]);
-        matrixSizesSize = sizeof(int) * 39;
+        matrixASize = (uint32_t) (sizeof(float) *buffsizes[0]);
+        matrixBSize = (uint32_t) (sizeof(float) *(buffsizes[1] + buffsizes[2] + 2));
+        matrixCSize = (uint32_t) (sizeof(float) * buffsizes[3]);
+        matrixSizesSize = sizeof(int) * 40;
         
         inputSize = (uint32_t) (sizeof(float)*input_size);
         filterSize = (uint32_t) (sizeof(float)*filter_size);
@@ -575,50 +580,50 @@ public:
     //     vkGetDeviceQueue(device, queueFamilyIndex, 0, &queue);
     // }
 
-    uint32_t findMemoryType(VkDeviceSize memorySize, VkMemoryPropertyFlags properties) {
-        VkPhysicalDeviceMemoryProperties memoryProperties;
+    // uint32_t findMemoryType(VkDeviceSize memorySize, VkMemoryPropertyFlags properties) {
+    //     VkPhysicalDeviceMemoryProperties memoryProperties;
 
-        vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
+    //     vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
 
-        for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; ++i) {
-            if ((memorySize < memoryProperties.memoryHeaps[memoryProperties.memoryTypes[i].heapIndex].size) &&
-                ((memoryProperties.memoryTypes[i].propertyFlags & properties) == properties))
-                return i;
-        }
-        return -1;
-    }
+    //     for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; ++i) {
+    //         if ((memorySize < memoryProperties.memoryHeaps[memoryProperties.memoryTypes[i].heapIndex].size) &&
+    //             ((memoryProperties.memoryTypes[i].propertyFlags & properties) == properties))
+    //             return i;
+    //     }
+    //     return -1;
+    // }
 
     void createBuffer() {
-        VkBufferCreateInfo matrixACreateInfo = {};
-        matrixACreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        matrixACreateInfo.size = matrixASize+matrixBSize+matrixCSize; // buffer size in bytes. 
-        matrixACreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
-        matrixACreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
+        // VkBufferCreateInfo matrixACreateInfo = {};
+        // matrixACreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        // matrixACreateInfo.size = matrixASize+matrixBSize+matrixCSize; // buffer size in bytes. 
+        // matrixACreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
+        // matrixACreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
 
-        VK_CHECK_RESULT(vkCreateBuffer(device, &matrixACreateInfo, NULL, &matrixA)); // create buffer.
+        // VK_CHECK_RESULT(vkCreateBuffer(device, &matrixACreateInfo, NULL, &matrixA)); // create buffer.
 
-        VkBufferCreateInfo matrixSizesCreateInfo = {};
-        matrixSizesCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        matrixSizesCreateInfo.size = matrixSizesSize; // buffer size in bytes. 
-        matrixSizesCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
-        matrixSizesCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
+        // VkBufferCreateInfo matrixSizesCreateInfo = {};
+        // matrixSizesCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        // matrixSizesCreateInfo.size = matrixSizesSize; // buffer size in bytes. 
+        // matrixSizesCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
+        // matrixSizesCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
 
-        VK_CHECK_RESULT(vkCreateBuffer(device, &matrixSizesCreateInfo, NULL, &matrixSizes)); // create buffer.
+        // VK_CHECK_RESULT(vkCreateBuffer(device, &matrixSizesCreateInfo, NULL, &matrixSizes)); // create buffer.
         
-        VkMemoryRequirements memoryRequirementsmatrixA, memoryRequirementsmatrixSizes;
-        vkGetBufferMemoryRequirements(device, matrixA, &memoryRequirementsmatrixA);
-        vkGetBufferMemoryRequirements(device, matrixSizes, &memoryRequirementsmatrixSizes);
+        // VkMemoryRequirements memoryRequirementsmatrixA, memoryRequirementsmatrixSizes;
+        // vkGetBufferMemoryRequirements(device, matrixA, &memoryRequirementsmatrixA);
+        // vkGetBufferMemoryRequirements(device, matrixSizes, &memoryRequirementsmatrixSizes);
 
-        const VkDeviceSize memorySize = memoryRequirementsmatrixA.size+memoryRequirementsmatrixSizes.size;
+        // const VkDeviceSize memorySize = memoryRequirementsmatrixA.size+memoryRequirementsmatrixSizes.size;
 
-        VkMemoryAllocateInfo allocateInfo = {};
-        allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        allocateInfo.allocationSize = memorySize; // specify required memory.
+        // VkMemoryAllocateInfo allocateInfo = {};
+        // allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        // allocateInfo.allocationSize = memorySize; // specify required memory.
 
-        allocateInfo.memoryTypeIndex = findMemoryType(
-            memorySize, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+        // allocateInfo.memoryTypeIndex = findMemoryType(
+        //     memorySize, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
-        VK_CHECK_RESULT(vkAllocateMemory(device, &allocateInfo, NULL, &bufferMemory));
+        // VK_CHECK_RESULT(vkAllocateMemory(device, &allocateInfo, NULL, &bufferMemory));
 
         float* oActMinMaxtmp;
         VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, sizeof(float)*2, 0, (void **) &oActMinMaxtmp));
@@ -650,7 +655,7 @@ public:
         vkUnmapMemory(device, bufferMemory);
 
         int* stridepaddimstmp;
-        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, inputSize+(sizeof(float)*2)+filterSize+biasSize+outputSize, matrixSizesSize, 0, (void **) &stridepaddimstmp));
+        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, matrixASize+matrixBSize+matrixCSize, matrixSizesSize, 0, (void **) &stridepaddimstmp));
         
         stridepaddimstmp[0] = strideWidth;
         stridepaddimstmp[1] = strideHeight;
@@ -659,6 +664,7 @@ public:
         stridepaddimstmp[36] = inputSize/sizeof(float);
         stridepaddimstmp[37] = filterSize/sizeof(float);
         stridepaddimstmp[38] = biasSize/sizeof(float);
+        stridepaddimstmp[39] = outputSize/sizeof(float);
         for(int i = 0; i < 16; i++) {
             stridepaddimstmp[i+4] = dimSizes[i];
             stridepaddimstmp[i+20] = dimStrides[i];
@@ -666,8 +672,8 @@ public:
 
         vkUnmapMemory(device, bufferMemory);
 
-        VK_CHECK_RESULT(vkBindBufferMemory(device, matrixA, bufferMemory, 0));
-        VK_CHECK_RESULT(vkBindBufferMemory(device, matrixSizes, bufferMemory, matrixASize+matrixBSize+matrixCSize));
+        // VK_CHECK_RESULT(vkBindBufferMemory(device, matrixA, bufferMemory, 0));
+        // VK_CHECK_RESULT(vkBindBufferMemory(device, matrixSizes, bufferMemory, matrixASize+matrixBSize+matrixCSize));
     }
 
     // void createDescriptorSetLayout() {
@@ -855,20 +861,6 @@ public:
     // }
 
     void createCommandBuffer() {
-        VkCommandPoolCreateInfo commandPoolCreateInfo = {};
-        commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-        commandPoolCreateInfo.flags = 0;
-        commandPoolCreateInfo.queueFamilyIndex = queueFamilyIndex;
-        VK_CHECK_RESULT(vkCreateCommandPool(device, &commandPoolCreateInfo, NULL, &commandPool));
-
-        VkCommandBufferAllocateInfo commandBufferAllocateInfo = {};
-        commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        commandBufferAllocateInfo.commandPool = commandPool;
-
-        commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        commandBufferAllocateInfo.commandBufferCount = 1; // allocate a single command buffer. 
-        VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, &commandBuffer)); // allocate command buffer.
-
         VkCommandBufferBeginInfo beginInfo = {};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT; // the buffer is only submitted and used once in this application.
@@ -877,6 +869,7 @@ public:
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, &descriptorSet, 0, NULL);
 
+        int batches = dimSizes[3];
         int output_depth = dimSizes[7];
         int output_height = dimSizes[14];  
         int output_width = dimSizes[13];
@@ -929,21 +922,21 @@ public:
     }
 
     void cleanup() {
-        vkFreeMemory(device, bufferMemory, NULL);
-        vkDestroyBuffer(device, matrixA, NULL);
-        vkDestroyBuffer(device, matrixSizes, NULL);
+        // vkFreeMemory(device, bufferMemory, NULL);
+        // vkDestroyBuffer(device, matrixA, NULL);
+        // vkDestroyBuffer(device, matrixSizes, NULL);
         //vkDestroyShaderModule(device, computeShaderModule, NULL);
         vkDestroyDescriptorPool(device, descriptorPool, NULL);
         //vkDestroyDescriptorSetLayout(device, descriptorSetLayout, NULL);
         //vkDestroyPipelineLayout(device, pipelineLayout, NULL);
         //vkDestroyPipeline(device, pipeline, NULL);
-        vkDestroyCommandPool(device, commandPool, NULL);  
+        // vkDestroyCommandPool(device, commandPool, NULL);  
         //vkDestroyDevice(device, NULL);
         //vkDestroyInstance(instance, NULL);    
     }
 };
 
-void vulkanTestConv(const float* input_data, const int input_size,
+void vulkanTestConv(int buffsizes[4], const float* input_data, const int input_size,
           const float* filter_data, const int filter_size,
           const float* bias_data, const int bias_size,
           float* output_data, const int output_size,
@@ -955,7 +948,7 @@ void vulkanTestConv(const float* input_data, const int input_size,
     VkDescriptorSetLayout descriptorSetLayoutConv, VkQueue queueV, uint32_t queueFamilyIndex) {
 
     VulkanConvolution app;
-    app.run(input_data,input_size,
+    app.run(buffsizes, input_data,input_size,
           filter_data,filter_size,
           bias_data,bias_size,
           output_data,output_size,
@@ -981,8 +974,22 @@ inline void OpenCLConv(const float* input_data, const int input_size,
   // cl_mem d_output;
   // cl_mem d_dim_sizes;
   // cl_mem d_dim_strides;
-       
-  cl_kernel kernel;
+
+  //add cl_event
+  cl_event event_runkernel;
+  cl_event event_mapinput;
+  cl_event event_mapfilter;
+  cl_event event_mapbias;
+  cl_event event_mapoutput;
+  cl_event event_unmapinput;
+  cl_event event_unmapfilter;
+  cl_event event_unmapbias;
+  cl_event event_unmapoutput;
+  cl_event event_writedimsizes;
+  cl_event event_writedimstrides;
+
+  cl_int err;
+  // cl_kernel kernel;
   
   int batches = dim_sizes[3];
   int output_depth = dim_sizes[7];
@@ -992,53 +999,53 @@ inline void OpenCLConv(const float* input_data, const int input_size,
   const size_t local[2] = { 8, 32 };
   const size_t global[2] = { (size_t) (((output_depth*batches-1)/8+1)*8), (size_t) (((output_height*output_width-1)/32+1)*32) };
 
-  cl_int err;
+  
 
-  // Start Timers
-  double wall0 = get_wall_time();
-  double cpu0  = get_cpu_time();
+  // // Start Timers
+  // double wall0 = get_wall_time();
+  // double cpu0  = get_cpu_time();
 
-  kernel = clCreateKernel(program, "convhalf", &err);
+  
 
-  // Stop timers
-  double wall1 = get_wall_time();
-  double cpu1  = get_cpu_time();
+  // // Stop timers
+  // double wall1 = get_wall_time();
+  // double cpu1  = get_cpu_time();
 
-  double wall = wall1 - wall0;
-  double cpu = cpu1 - cpu0;
+  // double wall = wall1 - wall0;
+  // double cpu = cpu1 - cpu0;
 
-  // note: andoird log
-  __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Walltime createkernel: %lf", wall);
+  // // note: andoird log
+  // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Walltime createkernel: %lf", wall);
 
-  wall0 = get_wall_time();
-  cpu0  = get_cpu_time();
+  // wall0 = get_wall_time();
+  // cpu0  = get_cpu_time();
 
-  // d_input = clCreateBuffer(context, CL_MEM_READ_ONLY, input_size*sizeof(half), NULL, NULL);
-  // d_filter = clCreateBuffer(context, CL_MEM_READ_ONLY, filter_size*sizeof(half), NULL, NULL);
-  // d_bias = clCreateBuffer(context, CL_MEM_READ_ONLY, bias_size*sizeof(half), NULL, NULL);
-  // d_output = clCreateBuffer(context, CL_MEM_WRITE_ONLY, output_size*sizeof(half), NULL, NULL);
-  // d_dim_sizes = clCreateBuffer(context, CL_MEM_READ_ONLY, 16*sizeof(int), NULL, NULL);
-  // d_dim_strides = clCreateBuffer(context, CL_MEM_READ_ONLY, 16*sizeof(int), NULL, NULL);
+  // // d_input = clCreateBuffer(context, CL_MEM_READ_ONLY, input_size*sizeof(half), NULL, NULL);
+  // // d_filter = clCreateBuffer(context, CL_MEM_READ_ONLY, filter_size*sizeof(half), NULL, NULL);
+  // // d_bias = clCreateBuffer(context, CL_MEM_READ_ONLY, bias_size*sizeof(half), NULL, NULL);
+  // // d_output = clCreateBuffer(context, CL_MEM_WRITE_ONLY, output_size*sizeof(half), NULL, NULL);
+  // // d_dim_sizes = clCreateBuffer(context, CL_MEM_READ_ONLY, 16*sizeof(int), NULL, NULL);
+  // // d_dim_strides = clCreateBuffer(context, CL_MEM_READ_ONLY, 16*sizeof(int), NULL, NULL);
 
-  // Stop timers
-  wall1 = get_wall_time();
-  cpu1  = get_cpu_time();
+  // // Stop timers
+  // wall1 = get_wall_time();
+  // cpu1  = get_cpu_time();
 
-  wall = wall1 - wall0;
-  cpu = cpu1 - cpu0;
+  // wall = wall1 - wall0;
+  // cpu = cpu1 - cpu0;
 
-  //note: andoird log
-  __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Walltime createbuffer: %lf", wall);
+  // //note: andoird log
+  // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Walltime createbuffer: %lf", wall);
 
-  wall0 = get_wall_time();
-  cpu0  = get_cpu_time();
+  // wall0 = get_wall_time();
+  // cpu0  = get_cpu_time();
 
-  // err = clEnqueueWriteBuffer(queue, d_input, CL_TRUE, 0,
-  //                                input_size*sizeof(half), input_data, 0, NULL, NULL);
-  // err = clEnqueueWriteBuffer(queue, d_filter, CL_TRUE, 0,
-  //                                filter_size*sizeof(half), filter_data, 0, NULL, NULL);
-  // err = clEnqueueWriteBuffer(queue, d_bias, CL_TRUE, 0,
-  //                                bias_size*sizeof(half), bias_data, 0, NULL, NULL);
+  // // err = clEnqueueWriteBuffer(queue, d_input, CL_TRUE, 0,
+  // //                                input_size*sizeof(half), input_data, 0, NULL, NULL);
+  // // err = clEnqueueWriteBuffer(queue, d_filter, CL_TRUE, 0,
+  // //                                filter_size*sizeof(half), filter_data, 0, NULL, NULL);
+  // // err = clEnqueueWriteBuffer(queue, d_bias, CL_TRUE, 0,
+  // //                                bias_size*sizeof(half), bias_data, 0, NULL, NULL);
 
   half *inputHalf = (half*)clEnqueueMapBuffer(
               queue,
@@ -1047,7 +1054,7 @@ inline void OpenCLConv(const float* input_data, const int input_size,
               CL_MAP_WRITE,
               0,
               input_size*sizeof(half),
-              0, NULL, NULL, NULL);
+              0, NULL, NULL, &err);
   half *filterHalf = (half*)clEnqueueMapBuffer(
               queue,
               d_filter,
@@ -1055,7 +1062,7 @@ inline void OpenCLConv(const float* input_data, const int input_size,
               CL_MAP_WRITE,
               0,
               filter_size*sizeof(half),
-              0, NULL, NULL, NULL);
+              0, NULL, NULL, &err);
   half *biasHalf = (half*)clEnqueueMapBuffer(
               queue,
               d_bias,
@@ -1063,7 +1070,7 @@ inline void OpenCLConv(const float* input_data, const int input_size,
               CL_MAP_WRITE,
               0,
               bias_size*sizeof(half),
-              0, NULL, NULL, NULL);
+              0, NULL, NULL, &err);
 
   for(int i = 0; i < std::max(std::max(input_size,filter_size),bias_size); i++) {
     // half halfTmp(matrix[i]);
@@ -1075,28 +1082,28 @@ inline void OpenCLConv(const float* input_data, const int input_size,
       biasHalf[i] = half_cast<half>(bias_data[i]);
   }
 
-  clEnqueueUnmapMemObject(queue,d_input,(void *) inputHalf,0, NULL, NULL);
-  clEnqueueUnmapMemObject(queue,d_filter,(void *) filterHalf,0, NULL, NULL);
-  clEnqueueUnmapMemObject(queue,d_bias,(void *) biasHalf,0, NULL, NULL);
+  clEnqueueUnmapMemObject(queue,d_input,(void *) inputHalf,0, NULL, &event_unmapinput);
+  clEnqueueUnmapMemObject(queue,d_filter,(void *) filterHalf,0, NULL, &event_unmapfilter);
+  clEnqueueUnmapMemObject(queue,d_bias,(void *) biasHalf,0, NULL, &event_unmapbias);
 
   err = clEnqueueWriteBuffer(queue, d_dim_sizes, CL_TRUE, 0,
-                                 16*sizeof(int), dim_sizes, 0, NULL, NULL);
+                                 16*sizeof(int), dim_sizes, 0, NULL, &event_writedimsizes);
   err = clEnqueueWriteBuffer(queue, d_dim_strides, CL_TRUE, 0,
-                                 16*sizeof(int), dim_strides, 0, NULL, NULL);
-  clFinish(queue);
+                                 16*sizeof(int), dim_strides, 0, NULL, &event_writedimstrides);
+  // clFinish(queue);
 
-  // Stop timers
-  wall1 = get_wall_time();
-  cpu1  = get_cpu_time();
+  // // Stop timers
+  // wall1 = get_wall_time();
+  // cpu1  = get_cpu_time();
 
-  wall = wall1 - wall0;
-  cpu = cpu1 - cpu0;
+  // wall = wall1 - wall0;
+  // cpu = cpu1 - cpu0;
 
-  // note: andoird log
-  __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Walltime writebuffer: %lf", wall);
+  // // note: andoird log
+  // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Walltime writebuffer: %lf", wall);
 
-  wall0 = get_wall_time();
-  cpu0  = get_cpu_time();
+  // wall0 = get_wall_time();
+  // cpu0  = get_cpu_time();
 
   err  = clSetKernelArg(kernel, 0, sizeof(cl_mem), &d_input);
   err  = clSetKernelArg(kernel, 1, sizeof(cl_mem), &d_filter);
@@ -1111,37 +1118,39 @@ inline void OpenCLConv(const float* input_data, const int input_size,
   err  = clSetKernelArg(kernel, 10, sizeof(half), &output_activation_min);
   err  = clSetKernelArg(kernel, 11, sizeof(half), &output_activation_max);
 
-  // Stop timers
-  wall1 = get_wall_time();
-  cpu1  = get_cpu_time();
+  // // Stop timers
+  // wall1 = get_wall_time();
+  // cpu1  = get_cpu_time();
 
-  wall = wall1 - wall0;
-  cpu = cpu1 - cpu0;
+  // wall = wall1 - wall0;
+  // cpu = cpu1 - cpu0;
 
-  // note: andoird log
-  __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Walltime setkernelargs: %lf", wall);
+  // // note: andoird log
+  // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Walltime setkernelargs: %lf", wall);
 
-  wall0 = get_wall_time();
-  cpu0  = get_cpu_time();
+  // wall0 = get_wall_time();
+  // cpu0  = get_cpu_time();
 
-  err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global, local, 0, NULL, NULL);
+  cl_event eventwaitlist[5] = {event_unmapinput,event_unmapfilter,event_unmapbias,event_writedimsizes,event_writedimstrides};
 
-  clFinish(queue);
+  err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global, local, 5, eventwaitlist, &event_runkernel);
 
-  // Stop timers
-  wall1 = get_wall_time();
-  cpu1  = get_cpu_time();
+  // clFinish(queue);
 
-  wall = wall1 - wall0;
-  cpu = cpu1 - cpu0;
+  // // Stop timers
+  // wall1 = get_wall_time();
+  // cpu1  = get_cpu_time();
 
-  // note: andoird log
-  __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelOclConv: %lf", wall);
+  // wall = wall1 - wall0;
+  // cpu = cpu1 - cpu0;
 
-  __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Converror: %d", err);
+  // // note: andoird log
+  // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelOclConv: %lf", wall);
 
-  wall0 = get_wall_time();
-  cpu0  = get_cpu_time();
+  // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Converror: %d", err);
+
+  // wall0 = get_wall_time();
+  // cpu0  = get_cpu_time();
 
   // clEnqueueReadBuffer(queue, d_output, CL_TRUE, 0, output_size*sizeof(half), output_data, 0, NULL, NULL );
   
@@ -1152,7 +1161,7 @@ inline void OpenCLConv(const float* input_data, const int input_size,
               CL_MAP_READ,
               0,
               output_size*sizeof(half),
-              0, NULL, NULL, NULL);
+              1, &event_runkernel, NULL, NULL);
 
   for(int i = 0; i < output_size; i++) {
     // half halfTmp(matrix[i]);
@@ -1163,39 +1172,39 @@ inline void OpenCLConv(const float* input_data, const int input_size,
 
   clFinish(queue);
 
-  // Stop timers
-  wall1 = get_wall_time();
-  cpu1  = get_cpu_time();
+  // // Stop timers
+  // wall1 = get_wall_time();
+  // cpu1  = get_cpu_time();
 
-  wall = wall1 - wall0;
-  cpu = cpu1 - cpu0;
+  // wall = wall1 - wall0;
+  // cpu = cpu1 - cpu0;
 
-  // note: andoird log
-  __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Walltime readbuffer: %lf", wall);
+  // // note: andoird log
+  // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Walltime readbuffer: %lf", wall);
 
-  wall0 = get_wall_time();
-  cpu0  = get_cpu_time();
+  // wall0 = get_wall_time();
+  // cpu0  = get_cpu_time();
 
-  // clReleaseMemObject(d_input);
-  // clReleaseMemObject(d_filter);
-  // clReleaseMemObject(d_bias);
-  // clReleaseMemObject(d_output);
-  // clReleaseMemObject(d_dim_sizes);
-  // clReleaseMemObject(d_dim_strides);
-  // clReleaseProgram(program);
-  clReleaseKernel(kernel);
-  // clReleaseCommandQueue(queue);
-  // clReleaseContext(context);
+  // // clReleaseMemObject(d_input);
+  // // clReleaseMemObject(d_filter);
+  // // clReleaseMemObject(d_bias);
+  // // clReleaseMemObject(d_output);
+  // // clReleaseMemObject(d_dim_sizes);
+  // // clReleaseMemObject(d_dim_strides);
+  // // clReleaseProgram(program);
+  // clReleaseKernel(kernel);
+  // // clReleaseCommandQueue(queue);
+  // // clReleaseContext(context);
 
-  // Stop timers
-  wall1 = get_wall_time();
-  cpu1  = get_cpu_time();
+  // // Stop timers
+  // wall1 = get_wall_time();
+  // cpu1  = get_cpu_time();
 
-  wall = wall1 - wall0;
-  cpu = cpu1 - cpu0;
+  // wall = wall1 - wall0;
+  // cpu = cpu1 - cpu0;
 
-  // note: andoird log
-  __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Walltime cleaning: %lf", wall);
+  // // note: andoird log
+  // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Walltime cleaning: %lf", wall);
 }
 
 // inline void OpenCLConv(const float* input_data, const int input_size,
@@ -1536,6 +1545,19 @@ void ConvApik(const float* input_data,
   }
 }
 
+inline uint32_t findMemoryType2(VkPhysicalDevice physicalDevice, VkDeviceSize memorySize, VkMemoryPropertyFlags properties) {
+        VkPhysicalDeviceMemoryProperties memoryProperties;
+
+  vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
+
+  for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; ++i) {
+      if ((memorySize < memoryProperties.memoryHeaps[memoryProperties.memoryTypes[i].heapIndex].size) &&
+          ((memoryProperties.memoryTypes[i].propertyFlags & properties) == properties))
+          return i;
+  }
+  return -1;
+}
+
 inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
                  const float* filter_data, const Dims<4>& filter_dims,
                  const float* bias_data, const Dims<4>& bias_dims,
@@ -1548,15 +1570,22 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
                  VkPhysicalDevice physicalDevice, VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, 
     VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex) {
   
-  if(d_input == NULL) {
-    __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelmasuksekali");    
-    d_input = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[0]*sizeof(half), NULL, NULL);
-    d_filter = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[1]*sizeof(half), NULL, NULL);
-    d_bias = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[2]*sizeof(half), NULL, NULL);
-    d_output = clCreateBuffer(context_cl, CL_MEM_WRITE_ONLY, buffsizes[3]*sizeof(half), NULL, NULL);
-    d_dim_sizes = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, 16*sizeof(int), NULL, NULL);
-    d_dim_strides = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, 16*sizeof(int), NULL, NULL);
-  }
+  // if(d_input == NULL) {
+  //   __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelmasuksekali");    
+      
+  //   kernel = clCreateKernel(program, "convhalf", NULL);
+
+  //   d_input = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[0]*sizeof(half), NULL, NULL);
+  //   d_filter = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[1]*sizeof(half), NULL, NULL);
+  //   d_bias = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[2]*sizeof(half), NULL, NULL);
+  //   d_output = clCreateBuffer(context_cl, CL_MEM_WRITE_ONLY, buffsizes[3]*sizeof(half), NULL, NULL);
+  //   d_dim_sizes = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, 16*sizeof(int), NULL, NULL);
+  //   d_dim_strides = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, 16*sizeof(int), NULL, NULL);
+
+  // }
+
+
+
 
   int inheightsize = input_dims.sizes[2];
   int inwidthsize = input_dims.sizes[1];
@@ -1643,10 +1672,67 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
   int bias_size = output_depth;
   int output_size = batches*output_width*output_height*output_depth;
 
-  __android_log_print(ANDROID_LOG_INFO, "VectorSize", "InputSizeconv: %d", input_size);
-  __android_log_print(ANDROID_LOG_INFO, "VectorSize", "OutputSizeconv: %d", output_size);
-  __android_log_print(ANDROID_LOG_INFO, "VectorSize", "FitlerSizeconv: %d", filter_size);
-  __android_log_print(ANDROID_LOG_INFO, "VectorSize", "BiasSizeconv: %d", bias_size);
+  // __android_log_print(ANDROID_LOG_INFO, "VectorSize", "InputSizeconv: %d", input_size);
+  // __android_log_print(ANDROID_LOG_INFO, "VectorSize", "OutputSizeconv: %d", output_size);
+  // __android_log_print(ANDROID_LOG_INFO, "VectorSize", "FitlerSizeconv: %d", filter_size);
+  // __android_log_print(ANDROID_LOG_INFO, "VectorSize", "BiasSizeconv: %d", bias_size);
+
+
+  if(commandBuffer == NULL) {
+    uint32_t matrixASize = (uint32_t) (sizeof(float) *buffsizes[0]);
+    uint32_t matrixBSize = (uint32_t) (sizeof(float) *(buffsizes[1] + buffsizes[2] + 2));
+    uint32_t matrixCSize = (uint32_t) (sizeof(float) * buffsizes[3]);
+    uint32_t matrixSizesSize = sizeof(int) * 40;
+
+    VkBufferCreateInfo matrixACreateInfo = {};
+    matrixACreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    matrixACreateInfo.size = matrixASize+matrixBSize+matrixCSize; // buffer size in bytes. 
+    matrixACreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
+    matrixACreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
+
+    VK_CHECK_RESULT(vkCreateBuffer(device, &matrixACreateInfo, NULL, &matrixA)); // create buffer.
+
+    VkBufferCreateInfo matrixSizesCreateInfo = {};
+    matrixSizesCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    matrixSizesCreateInfo.size = matrixSizesSize; // buffer size in bytes. 
+    matrixSizesCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
+    matrixSizesCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
+
+    VK_CHECK_RESULT(vkCreateBuffer(device, &matrixSizesCreateInfo, NULL, &matrixSizes)); // create buffer.
+    
+    VkMemoryRequirements memoryRequirementsmatrixA, memoryRequirementsmatrixSizes;
+    vkGetBufferMemoryRequirements(device, matrixA, &memoryRequirementsmatrixA);
+    vkGetBufferMemoryRequirements(device, matrixSizes, &memoryRequirementsmatrixSizes);
+
+    const VkDeviceSize memorySize = memoryRequirementsmatrixA.size+memoryRequirementsmatrixSizes.size;
+
+    VkMemoryAllocateInfo allocateInfo = {};
+    allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocateInfo.allocationSize = memorySize; // specify required memory.
+
+    allocateInfo.memoryTypeIndex = findMemoryType2(
+        physicalDevice, memorySize, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+
+    VK_CHECK_RESULT(vkAllocateMemory(device, &allocateInfo, NULL, &bufferMemory));
+
+    VK_CHECK_RESULT(vkBindBufferMemory(device, matrixA, bufferMemory, 0));
+    VK_CHECK_RESULT(vkBindBufferMemory(device, matrixSizes, bufferMemory, matrixASize+matrixBSize+matrixCSize));
+
+    VkCommandPoolCreateInfo commandPoolCreateInfo = {};
+    commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    commandPoolCreateInfo.flags = 0;
+    commandPoolCreateInfo.queueFamilyIndex = queueFamilyIndex;
+    VK_CHECK_RESULT(vkCreateCommandPool(device, &commandPoolCreateInfo, NULL, &commandPool));
+
+    VkCommandBufferAllocateInfo commandBufferAllocateInfo = {};
+    commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    commandBufferAllocateInfo.commandPool = commandPool;
+
+    commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    commandBufferAllocateInfo.commandBufferCount = 1; // allocate a single command buffer. 
+    VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, &commandBuffer)); // allocate command buffer.
+  }
+
 
 
   // // // Test half precision
@@ -1685,15 +1771,15 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
   //         half_cast<half>(output_activation_min), half_cast<half>(output_activation_max),
   //         context_cl, queue, program);
 
-    OpenCLConv(input_data, input_size,
-          filter_data, filter_size,
-          bias_data, bias_size,
-          output_data, output_size,
-          stride_width, stride_height, 
-          pad_width, pad_height, 
-          sizes, strides,
-          half_cast<half>(output_activation_min), half_cast<half>(output_activation_max),
-          context_cl, queue, program);
+    // OpenCLConv(input_data, input_size,
+    //       filter_data, filter_size,
+    //       bias_data, bias_size,
+    //       output_data, output_size,
+    //       stride_width, stride_height, 
+    //       pad_width, pad_height, 
+    //       sizes, strides,
+    //       half_cast<half>(output_activation_min), half_cast<half>(output_activation_max),
+    //       context_cl, queue, program);
 
   // for(int i = 0; i < output_size; i++) {
   //   // half halfTmp(vector[i]);
@@ -1708,16 +1794,16 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
   // double wall0 = get_wall_time();
   // double cpu0  = get_cpu_time();
 
-  // // vulkanTestConv(input_data, input_size,
-  // //         filter_data, filter_size,
-  // //         bias_data, bias_size,
-  // //         output_data, output_size,
-  // //         stride_width, stride_height, 
-  // //         pad_width, pad_height, 
-  // //         sizes, strides,
-  // //         output_activation_min, output_activation_max,
-  // //         physicalDevice, device, pipelineConv, pipelineLayoutConv, 
-  // //         descriptorSetLayoutConv, queueV, queueFamilyIndex);
+  vulkanTestConv(buffsizes, input_data, input_size,
+          filter_data, filter_size,
+          bias_data, bias_size,
+          output_data, output_size,
+          stride_width, stride_height, 
+          pad_width, pad_height, 
+          sizes, strides,
+          output_activation_min, output_activation_max,
+          physicalDevice, device, pipelineConv, pipelineLayoutConv, 
+          descriptorSetLayoutConv, queueV, queueFamilyIndex);
 
 
 

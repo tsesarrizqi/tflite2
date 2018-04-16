@@ -970,7 +970,7 @@ void createDescriptorSetLayoutMatmul() {
 }
 
 void createDescriptorSetLayoutConv() {
-    VkDescriptorSetLayoutBinding descriptorSetLayoutBindings[4];
+    VkDescriptorSetLayoutBinding descriptorSetLayoutBindings[2];
 
     descriptorSetLayoutBindings[0] = {};
     descriptorSetLayoutBindings[0].binding = 0; // binding = 0
@@ -998,48 +998,43 @@ void createConvPipeline() {
     "#extension GL_ARB_separate_shader_objects : enable  \n" \
     "layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in;  \n" \
     "layout(binding = 0) buffer floatBuffer {  \n" \
-    "    vec2 actMinMax;  \n" \
+    "    float actMin;  \n" \
+    "    float actMax;  \n" \
     "    float convFloatB[];  \n" \
     "};  \n" \
     "layout(binding = 1) readonly buffer intBuffer {  \n" \
-    "int strideWidth;  \n" \
-    "int strideHeight;  \n" \
-    "int padWidth;  \n" \
-    "int padHeight;  \n" \
-    "int dimSizes[16];  \n" \
-    "int dimStrides[16];  \n" \
-    "int inSize;  \n" \
-    "int filterSize;  \n" \
-    "int biasSize;  \n" \
+    "    ivec4 stridePad;  \n" \
+    "    ivec4 dimSizes[4];  \n" \
+    "    ivec4 dimStrides[4];  \n" \
+    "    ivec4 ifboSize;  \n" \
     "};  \n" \
     "void main() {  \n" \
-    "  int out_channel = int(gl_GlobalInvocationID.x);  \n" \
-    "  int out_y = int(gl_GlobalInvocationID.y);  \n" \
-    "  int out_x = int(gl_GlobalInvocationID.z);  \n" \
-    "  if((out_channel < dimSizes[7]) && (out_x < dimSizes[13]) && (out_y < dimSizes[14])) {  \n" \
-    "      for (int batch = 0; batch < dimSizes[3]; ++batch) {  \n" \
+    "    int out_channel = int(gl_GlobalInvocationID.x);   \n" \
+    "    int out_y = int(gl_GlobalInvocationID.y);   \n" \
+    "    int out_x = int(gl_GlobalInvocationID.z);   \n" \
+    "    if((out_channel < dimSizes[1].w) && (out_x < dimSizes[3].y) && (out_y < dimSizes[3].z)) {  \n" \
+    "      for(int batch = 0; batch < dimSizes[0].w; ++batch) { \n" \
     "        float total = 0.0;  \n" \
-    "        for (int filter_y = 0; filter_y < dimSizes[6]; ++filter_y) {  \n" \
-    "          for (int filter_x = 0; filter_x < dimSizes[5]; ++filter_x) {  \n" \
-    "            for (int in_channel = 0; in_channel < dimSizes[0]; ++in_channel) {  \n" \
-    "              int in_x = (out_x * strideWidth - padWidth) + filter_x;  \n" \
-    "              int in_y = (out_y * strideHeight - padHeight) + filter_y;  \n" \
-    "              if ((in_x >= 0) && (in_x < dimSizes[1]) && (in_y >= 0) &&  \n" \
-    "                  (in_y < dimSizes[2])) {  \n" \
-    "                total += (convFloatB[in_channel*dimStrides[0] + in_x*dimStrides[1] +in_y*dimStrides[2] + batch*dimStrides[3]] *   \n" \
-    "                        convFloatB[inSize + in_channel*dimStrides[4] + filter_x*dimStrides[5] + filter_y*dimStrides[6] + out_channel*dimStrides[7]]);  \n" \
+    "        for (int filter_y = 0; filter_y < dimSizes[1].z; ++filter_y) {  \n" \
+    "          for (int filter_x = 0; filter_x < dimSizes[1].y; ++filter_x) {  \n" \
+    "            for (int in_channel = 0; in_channel < dimSizes[0].x; ++in_channel) {  \n" \
+    "              int in_x = (out_x * stridePad.x - stridePad.z) + filter_x;  \n" \
+    "              int in_y = (out_y * stridePad.y - stridePad.w) + filter_y;  \n" \
+    "              if ((in_x >= 0) && (in_x < dimSizes[0].y) && (in_y >= 0) &&  \n" \
+    "                  (in_y < dimSizes[0].z)) {  \n" \
+    "                total += (convFloatB[in_channel*dimStrides[0].x + in_x*dimStrides[0].y +in_y*dimStrides[0].z + batch*dimStrides[0].w] *   \n" \
+    "                        convFloatB[ifboSize.x + in_channel*dimStrides[1].x + filter_x*dimStrides[1].y + filter_y*dimStrides[1].z + out_channel*dimStrides[1].w]);  \n" \
     "              }  \n" \
     "            }  \n" \
     "          }  \n" \
     "        }  \n" \
     "        float bias_value = 0.0;  \n" \
-    "        if (biasSize > 0) {  \n" \
-    "          bias_value = convFloatB[inSize + filterSize + (out_channel*dimStrides[8])];  \n" \
+    "        if (ifboSize.z > 0) {  \n" \
+    "          bias_value = convFloatB[ifboSize.x + ifboSize.y + (out_channel*dimStrides[2].x)];  \n" \
     "        }  \n" \
-    "        vec2 actMinMax0 = actMinMax; \n" \
-    "        convFloatB[inSize + filterSize + biasSize + out_channel*dimStrides[12] + out_x*dimStrides[13] + out_y*dimStrides[14] + batch*dimStrides[15]] = min(max(total + bias_value,actMinMax0.x),actMinMax0.y);  \n" \
+    "        convFloatB[ifboSize.x + ifboSize.y + ifboSize.z + out_channel*dimStrides[3].x + out_x*dimStrides[3].y + out_y*dimStrides[3].z + batch*dimStrides[3].w] = min(max(total + bias_value,actMin),actMax);  \n" \
     "      }  \n" \
-    "  }  \n" \
+    "    }  \n" \
     "}";
 
     shaderc::Compiler compiler;
@@ -1314,8 +1309,8 @@ TfLiteStatus InterpreterBuilder::ParseNodes(
   TfLiteStatus status = kTfLiteOk;
   //note: andoird log
   // __android_log_print(ANDROID_LOG_INFO, "Ngising", "addnodewithparam");
-  initOpenCL();
-  // initVulkan();
+  // initOpenCL();
+  initVulkan();
   for (int i = 0; i < operators->Length(); ++i) {
     const auto* op = operators->Get(i);
     int index = op->opcode_index();
