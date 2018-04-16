@@ -1136,10 +1136,10 @@ void createMatmulPipeline() {
       "        Acc[localidx] = sum; \n" \
       "        barrier();      \n" \
       "        if(localidx == 0) { \n" \
-      "            aA[(mM*kK/4) + (kK/4) + (row/4)] = Aacc[0] + Aacc[1] + Aacc[2] + Aacc[3] + Aacc[4] + Aacc[5] + Aacc[6] + Aacc[7]+ \n" \
-      "            Aacc[8] + Aacc[9] + Aacc[10] + Aacc[11] + Aacc[12] + Aacc[13] + Aacc[14] + Aacc[15]+ \n" \
-      "            Aacc[16] + Aacc[17] + Aacc[18] + Aacc[19] + Aacc[20] + Aacc[21] + Aacc[22] + Aacc[23]+ \n" \
-      "            Aacc[24] + Aacc[25] + Aacc[26] + Aacc[27] + Aacc[28] + Aacc[29] + Aacc[30] + Aacc[31]; \n" \
+      "            aA[(mM*kK/4) + (kK/4) + (row/4)] = Acc[0] + Acc[1] + Acc[2] + Acc[3] + Acc[4] + Acc[5] + Acc[6] + Acc[7]+ \n" \
+      "            Acc[8] + Acc[9] + Acc[10] + Acc[11] + Acc[12] + Acc[13] + Acc[14] + Acc[15]+ \n" \
+      "            Acc[16] + Acc[17] + Acc[18] + Acc[19] + Acc[20] + Acc[21] + Acc[22] + Acc[23]+ \n" \
+      "            Acc[24] + Acc[25] + Acc[26] + Acc[27] + Acc[28] + Acc[29] + Acc[30] + Acc[31]; \n" \
       "        } \n" \
       "    } \n" \
       "}";
