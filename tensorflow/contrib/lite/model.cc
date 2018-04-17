@@ -228,6 +228,32 @@ cl_context context_cl = NULL;
 cl_command_queue queueCL = NULL;
 cl_program program = NULL;
 
+cl_mem d_conv_input = NULL;
+cl_mem d_conv_filter = NULL;
+cl_mem d_conv_bias = NULL;
+cl_mem d_conv_output = NULL;
+cl_mem d_conv_dim_sizes = NULL;
+cl_mem d_conv_dim_strides = NULL;
+VkCommandPool conv_commandPool = NULL;
+VkCommandBuffer conv_commandBuffer = NULL;
+VkBuffer conv_matrixA = NULL;
+VkBuffer conv_matrixSizes = NULL;
+VkDeviceMemory conv_bufferMemory = NULL;
+
+int buffsizes[4] = {710432, 1548288, 1024, 1382976};
+
+//mobilenet
+// 04-17 12:13:31.648 24739-24794/android.example.com.tflitecamerademo I/VectorSize: inputSizeconv.cc: 401408
+// 04-17 12:13:31.648 24739-24794/android.example.com.tflitecamerademo I/VectorSize: filterSizeconv.cc: 1048576
+// 04-17 12:13:31.648 24739-24794/android.example.com.tflitecamerademo I/VectorSize: biasSizeconv.cc: 1024
+// 04-17 12:13:31.648 24739-24794/android.example.com.tflitecamerademo I/VectorSize: outputSizeconv.cc: 802816
+
+//inception
+// 04-17 12:18:46.322 27363-27479/android.example.com.tflitecamerademo I/VectorSize: inputSizeconv.cc: 710432
+// 04-17 12:18:46.322 27363-27479/android.example.com.tflitecamerademo I/VectorSize: filterSizeconv.cc: 1548288
+// 04-17 12:18:46.322 27363-27479/android.example.com.tflitecamerademo I/VectorSize: biasSizeconv.cc: 448
+// 04-17 12:18:46.322 27363-27479/android.example.com.tflitecamerademo I/VectorSize: outputSizeconv.cc: 1382976
+
 //buffer sizes
 // int buffsizes[4] = {0,0,0,0};
 
@@ -832,6 +858,20 @@ void initOpenCL() {
     sizeof(size_t),
     &maxWorkGroupSize3,
     NULL);
+
+  // if(d_input == NULL) {
+  //   __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelmasuksekali");    
+      
+  // kernel = clCreateKernel(program, "convhalf", NULL);
+
+  d_conv_input = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[0]*sizeof(cl_half), NULL, NULL);
+  d_conv_filter = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[1]*sizeof(cl_half), NULL, NULL);
+  d_conv_bias = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[2]*sizeof(cl_half), NULL, NULL);
+  d_conv_output = clCreateBuffer(context_cl, CL_MEM_WRITE_ONLY, buffsizes[3]*sizeof(cl_half), NULL, NULL);
+  d_conv_dim_sizes = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, 16*sizeof(int), NULL, NULL);
+  d_conv_dim_strides = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, 16*sizeof(int), NULL, NULL);
+
+  // }
   //note: andoird log
   // __android_log_print(ANDROID_LOG_INFO, "Ngising", "MAX Workgroup transpose: %d",maxWorkGroupSize1);
   // __android_log_print(ANDROID_LOG_INFO, "Ngising", "MAX Workgroup conv: %d",maxWorkGroupSize2);
@@ -950,6 +990,19 @@ uint32_t findMemoryType(VkDeviceSize memorySize, VkMemoryPropertyFlags propertie
             return i;
     }
     return -1;
+}
+
+uint32_t findMemoryType2(VkPhysicalDevice physicalDevice, VkDeviceSize memorySize, VkMemoryPropertyFlags properties) {
+        VkPhysicalDeviceMemoryProperties memoryProperties;
+
+  vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
+
+  for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; ++i) {
+      if ((memorySize < memoryProperties.memoryHeaps[memoryProperties.memoryTypes[i].heapIndex].size) &&
+          ((memoryProperties.memoryTypes[i].propertyFlags & properties) == properties))
+          return i;
+  }
+  return -1;
 }
 
 void createDescriptorSetLayoutMatmul() {
@@ -1255,36 +1308,60 @@ void createMatmulPipeline() {
         NULL, &pipelineMatmul));
 }
 
-// void createCommandBuffer() {
-//     VkCommandPoolCreateInfo commandPoolCreateInfo = {};
-//     commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-//     commandPoolCreateInfo.flags = 0;
-//     commandPoolCreateInfo.queueFamilyIndex = queueFamilyIndex;
-//     VK_CHECK_RESULT(vkCreateCommandPool(device, &commandPoolCreateInfo, NULL, &commandPool));
+void createConvBuffer() {
+    uint32_t matrixASize = (uint32_t) (sizeof(float) *buffsizes[0]);
+    uint32_t matrixBSize = (uint32_t) (sizeof(float) *(buffsizes[1] + buffsizes[2] + 2));
+    uint32_t matrixCSize = (uint32_t) (sizeof(float) * buffsizes[3]);
+    uint32_t matrixSizesSize = sizeof(int) * 40;
 
-//     VkCommandBufferAllocateInfo commandBufferAllocateInfo = {};
-//     commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-//     commandBufferAllocateInfo.commandPool = commandPool;
+    VkBufferCreateInfo matrixACreateInfo = {};
+    matrixACreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    matrixACreateInfo.size = matrixASize+matrixBSize+matrixCSize; // buffer size in bytes. 
+    matrixACreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
+    matrixACreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
 
-//     commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-//     commandBufferAllocateInfo.commandBufferCount = 1; // allocate a single command buffer. 
-//     VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, &commandBuffer)); // allocate command buffer.
+    VK_CHECK_RESULT(vkCreateBuffer(device, &matrixACreateInfo, NULL, &conv_matrixA)); // create buffer.
 
-//     // VkCommandBufferBeginInfo beginInfo = {};
-//     // beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-//     // beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT; // the buffer is only submitted and used once in this application.
-//     // VK_CHECK_RESULT(vkBeginCommandBuffer(commandBuffer, &beginInfo)); // start recording commands.
+    VkBufferCreateInfo matrixSizesCreateInfo = {};
+    matrixSizesCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    matrixSizesCreateInfo.size = matrixSizesSize; // buffer size in bytes. 
+    matrixSizesCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
+    matrixSizesCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
 
-//     // vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
-//     // vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, &descriptorSet, 0, NULL);
+    VK_CHECK_RESULT(vkCreateBuffer(device, &matrixSizesCreateInfo, NULL, &conv_matrixSizes)); // create buffer.
+    
+    VkMemoryRequirements memoryRequirementsmatrixA, memoryRequirementsmatrixSizes;
+    vkGetBufferMemoryRequirements(device, conv_matrixA, &memoryRequirementsmatrixA);
+    vkGetBufferMemoryRequirements(device, conv_matrixSizes, &memoryRequirementsmatrixSizes);
 
-//     // int output_depth = dimSizes[7];
-//     // int output_height = dimSizes[14];  
-//     // int output_width = dimSizes[13];
-//     // vkCmdDispatch(commandBuffer, (output_depth-1)/8+1, (output_height-1)/8+1, (output_width-1)/8+1);
+    const VkDeviceSize memorySize = memoryRequirementsmatrixA.size+memoryRequirementsmatrixSizes.size;
 
-//     // VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffer)); // end recording commands.
-// }
+    VkMemoryAllocateInfo allocateInfo = {};
+    allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocateInfo.allocationSize = memorySize; // specify required memory.
+
+    allocateInfo.memoryTypeIndex = findMemoryType2(
+        physicalDevice, memorySize, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+
+    VK_CHECK_RESULT(vkAllocateMemory(device, &allocateInfo, NULL, &conv_bufferMemory));
+
+    VK_CHECK_RESULT(vkBindBufferMemory(device, conv_matrixA, conv_bufferMemory, 0));
+    VK_CHECK_RESULT(vkBindBufferMemory(device, conv_matrixSizes, conv_bufferMemory, matrixASize+matrixBSize+matrixCSize));
+
+    VkCommandPoolCreateInfo commandPoolCreateInfo = {};
+    commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    commandPoolCreateInfo.flags = 0;
+    commandPoolCreateInfo.queueFamilyIndex = queueFamilyIndex;
+    VK_CHECK_RESULT(vkCreateCommandPool(device, &commandPoolCreateInfo, NULL, &conv_commandPool));
+
+    VkCommandBufferAllocateInfo commandBufferAllocateInfo = {};
+    commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    commandBufferAllocateInfo.commandPool = conv_commandPool;
+
+    commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    commandBufferAllocateInfo.commandBufferCount = 1; // allocate a single command buffer. 
+    VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, &conv_commandBuffer));
+}
 
 void initVulkan() {
     createInstance();
@@ -1301,6 +1378,8 @@ void initVulkan() {
     __android_log_print(ANDROID_LOG_INFO, "VulkanInit", "createMatmulPipeline");
     createConvPipeline();
     __android_log_print(ANDROID_LOG_INFO, "VulkanInit", "createConvPipeline");
+    createConvBuffer();
+    __android_log_print(ANDROID_LOG_INFO, "VulkanInit", "createConvBuffer");
 }
 
 TfLiteStatus InterpreterBuilder::ParseNodes(
@@ -1309,8 +1388,8 @@ TfLiteStatus InterpreterBuilder::ParseNodes(
   TfLiteStatus status = kTfLiteOk;
   //note: andoird log
   // __android_log_print(ANDROID_LOG_INFO, "Ngising", "addnodewithparam");
-  // initOpenCL();
-  initVulkan();
+  initOpenCL();
+  // initVulkan();
   for (int i = 0; i < operators->Length(); ++i) {
     const auto* op = operators->Get(i);
     int index = op->opcode_index();

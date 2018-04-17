@@ -1678,60 +1678,60 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
   // __android_log_print(ANDROID_LOG_INFO, "VectorSize", "BiasSizeconv: %d", bias_size);
 
 
-  if(commandBuffer == NULL) {
-    uint32_t matrixASize = (uint32_t) (sizeof(float) *buffsizes[0]);
-    uint32_t matrixBSize = (uint32_t) (sizeof(float) *(buffsizes[1] + buffsizes[2] + 2));
-    uint32_t matrixCSize = (uint32_t) (sizeof(float) * buffsizes[3]);
-    uint32_t matrixSizesSize = sizeof(int) * 40;
+  // if(commandBuffer == NULL) {
+  //   uint32_t matrixASize = (uint32_t) (sizeof(float) *buffsizes[0]);
+  //   uint32_t matrixBSize = (uint32_t) (sizeof(float) *(buffsizes[1] + buffsizes[2] + 2));
+  //   uint32_t matrixCSize = (uint32_t) (sizeof(float) * buffsizes[3]);
+  //   uint32_t matrixSizesSize = sizeof(int) * 40;
 
-    VkBufferCreateInfo matrixACreateInfo = {};
-    matrixACreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    matrixACreateInfo.size = matrixASize+matrixBSize+matrixCSize; // buffer size in bytes. 
-    matrixACreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
-    matrixACreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
+  //   VkBufferCreateInfo matrixACreateInfo = {};
+  //   matrixACreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+  //   matrixACreateInfo.size = matrixASize+matrixBSize+matrixCSize; // buffer size in bytes. 
+  //   matrixACreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
+  //   matrixACreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
 
-    VK_CHECK_RESULT(vkCreateBuffer(device, &matrixACreateInfo, NULL, &matrixA)); // create buffer.
+  //   VK_CHECK_RESULT(vkCreateBuffer(device, &matrixACreateInfo, NULL, &matrixA)); // create buffer.
 
-    VkBufferCreateInfo matrixSizesCreateInfo = {};
-    matrixSizesCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    matrixSizesCreateInfo.size = matrixSizesSize; // buffer size in bytes. 
-    matrixSizesCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
-    matrixSizesCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
+  //   VkBufferCreateInfo matrixSizesCreateInfo = {};
+  //   matrixSizesCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+  //   matrixSizesCreateInfo.size = matrixSizesSize; // buffer size in bytes. 
+  //   matrixSizesCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
+  //   matrixSizesCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
 
-    VK_CHECK_RESULT(vkCreateBuffer(device, &matrixSizesCreateInfo, NULL, &matrixSizes)); // create buffer.
+  //   VK_CHECK_RESULT(vkCreateBuffer(device, &matrixSizesCreateInfo, NULL, &matrixSizes)); // create buffer.
     
-    VkMemoryRequirements memoryRequirementsmatrixA, memoryRequirementsmatrixSizes;
-    vkGetBufferMemoryRequirements(device, matrixA, &memoryRequirementsmatrixA);
-    vkGetBufferMemoryRequirements(device, matrixSizes, &memoryRequirementsmatrixSizes);
+  //   VkMemoryRequirements memoryRequirementsmatrixA, memoryRequirementsmatrixSizes;
+  //   vkGetBufferMemoryRequirements(device, matrixA, &memoryRequirementsmatrixA);
+  //   vkGetBufferMemoryRequirements(device, matrixSizes, &memoryRequirementsmatrixSizes);
 
-    const VkDeviceSize memorySize = memoryRequirementsmatrixA.size+memoryRequirementsmatrixSizes.size;
+  //   const VkDeviceSize memorySize = memoryRequirementsmatrixA.size+memoryRequirementsmatrixSizes.size;
 
-    VkMemoryAllocateInfo allocateInfo = {};
-    allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocateInfo.allocationSize = memorySize; // specify required memory.
+  //   VkMemoryAllocateInfo allocateInfo = {};
+  //   allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+  //   allocateInfo.allocationSize = memorySize; // specify required memory.
 
-    allocateInfo.memoryTypeIndex = findMemoryType2(
-        physicalDevice, memorySize, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+  //   allocateInfo.memoryTypeIndex = findMemoryType2(
+  //       physicalDevice, memorySize, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
-    VK_CHECK_RESULT(vkAllocateMemory(device, &allocateInfo, NULL, &bufferMemory));
+  //   VK_CHECK_RESULT(vkAllocateMemory(device, &allocateInfo, NULL, &bufferMemory));
 
-    VK_CHECK_RESULT(vkBindBufferMemory(device, matrixA, bufferMemory, 0));
-    VK_CHECK_RESULT(vkBindBufferMemory(device, matrixSizes, bufferMemory, matrixASize+matrixBSize+matrixCSize));
+  //   VK_CHECK_RESULT(vkBindBufferMemory(device, matrixA, bufferMemory, 0));
+  //   VK_CHECK_RESULT(vkBindBufferMemory(device, matrixSizes, bufferMemory, matrixASize+matrixBSize+matrixCSize));
 
-    VkCommandPoolCreateInfo commandPoolCreateInfo = {};
-    commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    commandPoolCreateInfo.flags = 0;
-    commandPoolCreateInfo.queueFamilyIndex = queueFamilyIndex;
-    VK_CHECK_RESULT(vkCreateCommandPool(device, &commandPoolCreateInfo, NULL, &commandPool));
+  //   VkCommandPoolCreateInfo commandPoolCreateInfo = {};
+  //   commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+  //   commandPoolCreateInfo.flags = 0;
+  //   commandPoolCreateInfo.queueFamilyIndex = queueFamilyIndex;
+  //   VK_CHECK_RESULT(vkCreateCommandPool(device, &commandPoolCreateInfo, NULL, &commandPool));
 
-    VkCommandBufferAllocateInfo commandBufferAllocateInfo = {};
-    commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    commandBufferAllocateInfo.commandPool = commandPool;
+  //   VkCommandBufferAllocateInfo commandBufferAllocateInfo = {};
+  //   commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+  //   commandBufferAllocateInfo.commandPool = commandPool;
 
-    commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    commandBufferAllocateInfo.commandBufferCount = 1; // allocate a single command buffer. 
-    VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, &commandBuffer)); // allocate command buffer.
-  }
+  //   commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+  //   commandBufferAllocateInfo.commandBufferCount = 1; // allocate a single command buffer. 
+  //   VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, &commandBuffer)); // allocate command buffer.
+  // }
 
 
 
@@ -1771,15 +1771,15 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
   //         half_cast<half>(output_activation_min), half_cast<half>(output_activation_max),
   //         context_cl, queue, program);
 
-    // OpenCLConv(input_data, input_size,
-    //       filter_data, filter_size,
-    //       bias_data, bias_size,
-    //       output_data, output_size,
-    //       stride_width, stride_height, 
-    //       pad_width, pad_height, 
-    //       sizes, strides,
-    //       half_cast<half>(output_activation_min), half_cast<half>(output_activation_max),
-    //       context_cl, queue, program);
+    OpenCLConv(input_data, input_size,
+          filter_data, filter_size,
+          bias_data, bias_size,
+          output_data, output_size,
+          stride_width, stride_height, 
+          pad_width, pad_height, 
+          sizes, strides,
+          half_cast<half>(output_activation_min), half_cast<half>(output_activation_max),
+          context_cl, queue, program);
 
   // for(int i = 0; i < output_size; i++) {
   //   // half halfTmp(vector[i]);
@@ -1794,16 +1794,16 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
   // double wall0 = get_wall_time();
   // double cpu0  = get_cpu_time();
 
-  vulkanTestConv(buffsizes, input_data, input_size,
-          filter_data, filter_size,
-          bias_data, bias_size,
-          output_data, output_size,
-          stride_width, stride_height, 
-          pad_width, pad_height, 
-          sizes, strides,
-          output_activation_min, output_activation_max,
-          physicalDevice, device, pipelineConv, pipelineLayoutConv, 
-          descriptorSetLayoutConv, queueV, queueFamilyIndex);
+  // vulkanTestConv(buffsizes, input_data, input_size,
+  //         filter_data, filter_size,
+  //         bias_data, bias_size,
+  //         output_data, output_size,
+  //         stride_width, stride_height, 
+  //         pad_width, pad_height, 
+  //         sizes, strides,
+  //         output_activation_min, output_activation_max,
+  //         physicalDevice, device, pipelineConv, pipelineLayoutConv, 
+  //         descriptorSetLayoutConv, queueV, queueFamilyIndex);
 
 
 
