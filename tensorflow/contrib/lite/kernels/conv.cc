@@ -94,11 +94,19 @@ struct OpData {
   bool need_im2col;
 };
     
-static int buffsizes[4] = {0,0,0,0};
+// static int buffsizes[4] = {0,0,0,0};
+int buffsizes[4] = {710432, 1548288, 1024, 1382976};
 
 cl_context context_cl_global = NULL;       
 cl_command_queue queue_global = NULL;
 cl_program program_global = NULL;
+cl_mem cl_mem_arr_global[6];
+// cl_mem d_conv_input_global = NULL;
+// cl_mem d_conv_filter_global = NULL;
+// cl_mem d_conv_bias_global = NULL;
+// cl_mem d_conv_output_global = NULL;
+// cl_mem d_conv_dim_sizes_global = NULL;
+// cl_mem d_conv_dim_strides_global = NULL;
 
 VkPhysicalDevice physicalDevice_global = NULL;
 VkDevice device_global = NULL;
@@ -110,6 +118,11 @@ VkDescriptorSetLayout descriptorSetLayoutMatmul_global = NULL;
 VkDescriptorSetLayout descriptorSetLayoutConv_global = NULL;
 VkQueue queueV_global = NULL; 
 uint32_t queueFamilyIndex_global = 0;
+VkCommandPool conv_commandPool_global = NULL;
+VkCommandBuffer conv_commandBuffer_global = NULL;
+VkBuffer conv_matrixA_global = NULL;
+VkBuffer conv_matrixSizes_global = NULL;
+VkDeviceMemory conv_bufferMemory_global = NULL;
 
 // const char *kernelSource_conv =           "\n" \
 // "__kernel void conv(__global float* input_data,   \n" \
@@ -214,9 +227,10 @@ void* Init(TfLiteContext* context, const char* buffer, size_t length) {
 }
 
 void* InitOpenCL(TfLiteContext* context, const char* buffer, size_t length,
-  cl_context context_cl, cl_command_queue queue, cl_program program,
+  cl_context context_cl, cl_command_queue queue, cl_program program, cl_mem cl_mem_arr[6],
   VkPhysicalDevice physicalDevice, VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, 
-    VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex) {
+    VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex,
+    VkCommandPool conv_commandPool, VkCommandBuffer conv_commandBuffer, VkBuffer conv_matrixA, VkBuffer conv_matrixSizes, VkDeviceMemory conv_bufferMemory) {
   // This is a builtin op, so we don't use the contents in 'buffer', if any.
   // Instead, we allocate a new object to use as scratch space for im2col, and
   // to carry information from Prepare() to Eval().
@@ -224,6 +238,18 @@ void* InitOpenCL(TfLiteContext* context, const char* buffer, size_t length,
   context_cl_global = context_cl;
   program_global = program;
   queue_global = queue;
+  cl_mem_arr_global[0] = cl_mem_arr[0];
+  cl_mem_arr_global[1] = cl_mem_arr[1];
+  cl_mem_arr_global[2] = cl_mem_arr[2];
+  cl_mem_arr_global[3] = cl_mem_arr[3];
+  cl_mem_arr_global[4] = cl_mem_arr[4];
+  cl_mem_arr_global[5] = cl_mem_arr[5];
+  // d_conv_input_global = cl_mem_arr[0];
+  // d_conv_filter_global = cl_mem_arr[1];
+  // d_conv_bias_global = cl_mem_arr[2];
+  // d_conv_output_global = cl_mem_arr[3];
+  // d_conv_dim_sizes_global = cl_mem_arr[4];
+  // d_conv_dim_strides_global = cl_mem_arr[5];
 
   physicalDevice_global = physicalDevice; 
   device_global = device;
@@ -235,6 +261,11 @@ void* InitOpenCL(TfLiteContext* context, const char* buffer, size_t length,
   descriptorSetLayoutConv_global = descriptorSetLayoutConv;
   queueV_global = queueV; 
   queueFamilyIndex_global = queueFamilyIndex;
+  conv_commandPool_global = conv_commandPool;
+  conv_commandBuffer_global = conv_commandBuffer;
+  conv_matrixA_global = conv_matrixA;
+  conv_matrixSizes_global = conv_matrixSizes;
+  conv_bufferMemory_global = conv_bufferMemory;
 
   // //OpenCL init
   // cl_int err;
@@ -389,15 +420,15 @@ TfLiteStatus Prepare(TfLiteContext* context, TfLiteNode* node) {
   int filter_size1 = filter->dims->data[0]*filter->dims->data[1]*filter->dims->data[2]*filter->dims->data[3];
   int output_size1 = output->dims->data[0]*output->dims->data[1]*output->dims->data[2]*output->dims->data[3];
 
-  if(buffsizes[0] < input_size1) {
-    buffsizes[0] = input_size1;
-  }
-  if(buffsizes[1] < filter_size1) {
-    buffsizes[1] = filter_size1;
-  }
-  if(buffsizes[3] < output_size1) {
-    buffsizes[3] = output_size1;
-  }
+  // if(buffsizes[0] < input_size1) {
+  //   buffsizes[0] = input_size1;
+  // }
+  // if(buffsizes[1] < filter_size1) {
+  //   buffsizes[1] = filter_size1;
+  // }
+  // if(buffsizes[3] < output_size1) {
+  //   buffsizes[3] = output_size1;
+  // }
 
 
 
@@ -425,19 +456,19 @@ TfLiteStatus Prepare(TfLiteContext* context, TfLiteNode* node) {
     }
 
     bias_size = bias->dims->data[0];
-    if(buffsizes[2] < bias_size) {
-      buffsizes[2] = bias_size;
-    }
+    // if(buffsizes[2] < bias_size) {
+    //   buffsizes[2] = bias_size;
+    // }
     
 
     TF_LITE_ENSURE_EQ(context, bias->dims->size, 1);
     TF_LITE_ENSURE_EQ(context, bias->dims->data[0], filter->dims->data[0]);
   }
 
-  __android_log_print(ANDROID_LOG_INFO, "VectorSize", "inputSizeconv.cc: %d",buffsizes[0]);
-  __android_log_print(ANDROID_LOG_INFO, "VectorSize", "filterSizeconv.cc: %d",buffsizes[1]);
-  __android_log_print(ANDROID_LOG_INFO, "VectorSize", "biasSizeconv.cc: %d",buffsizes[2]);
-  __android_log_print(ANDROID_LOG_INFO, "VectorSize", "outputSizeconv.cc: %d",buffsizes[3]);
+  // __android_log_print(ANDROID_LOG_INFO, "VectorSize", "inputSizeconv.cc: %d",buffsizes[0]);
+  // __android_log_print(ANDROID_LOG_INFO, "VectorSize", "filterSizeconv.cc: %d",buffsizes[1]);
+  // __android_log_print(ANDROID_LOG_INFO, "VectorSize", "biasSizeconv.cc: %d",buffsizes[2]);
+  // __android_log_print(ANDROID_LOG_INFO, "VectorSize", "outputSizeconv.cc: %d",buffsizes[3]);
 
   int channels_out = filter->dims->data[0];
   int width = input->dims->data[2];
@@ -653,9 +684,10 @@ void EvalFloat(TfLiteContext* context, TfLiteNode* node,
         output_activation_max, GetTensorData<float>(output),
         GetTensorDims(output), GetTensorData<float>(im2col),
         GetTensorDims(im2col),
-        context_cl_global, queue_global, program_global, buffsizes,
+        context_cl_global, queue_global, program_global, cl_mem_arr_global, buffsizes,
         physicalDevice_global, device_global, pipelineConv_global, pipelineMatmul_global, pipelineLayoutConv_global, 
-        pipelineLayoutMatmul_global, descriptorSetLayoutConv_global, descriptorSetLayoutMatmul_global, queueV_global, queueFamilyIndex_global);
+        pipelineLayoutMatmul_global, descriptorSetLayoutConv_global, descriptorSetLayoutMatmul_global, queueV_global, queueFamilyIndex_global,
+        conv_commandPool_global, conv_commandBuffer_global, conv_matrixA_global, conv_matrixSizes_global, conv_bufferMemory_global);
     
   }
 }

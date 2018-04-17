@@ -47,12 +47,14 @@ void MatrixBatchVectorMultiplyAccumulateOpenCL(const float* matrix, int m_rows,
                                          int m_cols, const float* vector,
                                          int n_batch, float* result,
                                          int result_stride, 
-                                         cl_context context_cl, cl_command_queue queue, cl_program program,
+                                         cl_context context_cl, cl_command_queue queue, cl_program program, cl_mem cl_mem_arr[6],
                                          VkPhysicalDevice physicalDevice, VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, 
-    VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex) {
+    VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex,
+    VkCommandPool conv_commandPool, VkCommandBuffer conv_commandBuffer, VkBuffer conv_matrixA, VkBuffer conv_matrixSizes, VkDeviceMemory conv_bufferMemory) {
   NEON_OR_PORTABLE(MatrixBatchVectorMultiplyAccumulateOpenCL, matrix, m_rows, m_cols,
-                   vector, n_batch, result, result_stride, context_cl, queue, program,
-                   physicalDevice, device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, descriptorSetLayoutConv, descriptorSetLayoutMatmul, queueV, queueFamilyIndex);
+                   vector, n_batch, result, result_stride, context_cl, queue, program, cl_mem_arr,
+                   physicalDevice, device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, descriptorSetLayoutConv, descriptorSetLayoutMatmul, queueV, queueFamilyIndex,
+                   conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixSizes, conv_bufferMemory);
 }
 
 void VectorVectorCwiseProduct(const float* vector1, const float* vector2,

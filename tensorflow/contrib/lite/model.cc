@@ -242,6 +242,9 @@ VkDeviceMemory conv_bufferMemory = NULL;
 
 int buffsizes[4] = {710432, 1548288, 1024, 1382976};
 
+// cl_mem cl_mem_arr[6], VkCommandPool conv_commandPool, VkCommandBuffer conv_commandBuffer, VkBuffer conv_matrixA, VkBuffer conv_matrixSizes, VkDeviceMemory conv_bufferMemory
+// cl_mem_arr,conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixSizes, conv_bufferMemory
+
 //mobilenet
 // 04-17 12:13:31.648 24739-24794/android.example.com.tflitecamerademo I/VectorSize: inputSizeconv.cc: 401408
 // 04-17 12:13:31.648 24739-24794/android.example.com.tflitecamerademo I/VectorSize: filterSizeconv.cc: 1048576
@@ -992,19 +995,6 @@ uint32_t findMemoryType(VkDeviceSize memorySize, VkMemoryPropertyFlags propertie
     return -1;
 }
 
-uint32_t findMemoryType2(VkPhysicalDevice physicalDevice, VkDeviceSize memorySize, VkMemoryPropertyFlags properties) {
-        VkPhysicalDeviceMemoryProperties memoryProperties;
-
-  vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
-
-  for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; ++i) {
-      if ((memorySize < memoryProperties.memoryHeaps[memoryProperties.memoryTypes[i].heapIndex].size) &&
-          ((memoryProperties.memoryTypes[i].propertyFlags & properties) == properties))
-          return i;
-  }
-  return -1;
-}
-
 void createDescriptorSetLayoutMatmul() {
     VkDescriptorSetLayoutBinding descriptorSetLayoutBinding;
 
@@ -1340,8 +1330,8 @@ void createConvBuffer() {
     allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocateInfo.allocationSize = memorySize; // specify required memory.
 
-    allocateInfo.memoryTypeIndex = findMemoryType2(
-        physicalDevice, memorySize, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+    allocateInfo.memoryTypeIndex = findMemoryType(
+        memorySize, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
     VK_CHECK_RESULT(vkAllocateMemory(device, &allocateInfo, NULL, &conv_bufferMemory));
 
@@ -1388,8 +1378,8 @@ TfLiteStatus InterpreterBuilder::ParseNodes(
   TfLiteStatus status = kTfLiteOk;
   //note: andoird log
   // __android_log_print(ANDROID_LOG_INFO, "Ngising", "addnodewithparam");
-  initOpenCL();
-  // initVulkan();
+  // initOpenCL();
+  initVulkan();
   for (int i = 0; i < operators->Length(); ++i) {
     const auto* op = operators->Get(i);
     int index = op->opcode_index();
@@ -1420,6 +1410,7 @@ TfLiteStatus InterpreterBuilder::ParseNodes(
     if((op_type == 9) || (op_type == 3)) {
       //note: andoird log
       // __android_log_print(ANDROID_LOG_INFO, "Ngising", "code 25 benar");
+      cl_mem cl_mem_arr[6] = {d_conv_input,d_conv_filter,d_conv_bias,d_conv_output,d_conv_dim_sizes,d_conv_dim_strides};
       if (op->custom_options()) {
         // std::vector<int> vectmp = FlatBufferIntArrayToVector(op->inputs());
         // std::vector<int> vectmp2 = FlatBufferIntArrayToVector(op->outputs());
@@ -1430,9 +1421,10 @@ TfLiteStatus InterpreterBuilder::ParseNodes(
             FlatBufferIntArrayToVector(op->outputs()),
             reinterpret_cast<const char*>(op->custom_options()->data()),
             op->custom_options()->size(), nullptr, reg,
-            context_cl, queueCL, program,
+            context_cl, queueCL, program, cl_mem_arr,
             physicalDevice, device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, 
-            descriptorSetLayoutConv, descriptorSetLayoutMatmul, queue, queueFamilyIndex);
+            descriptorSetLayoutConv, descriptorSetLayoutMatmul, queue, queueFamilyIndex,
+            conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixSizes, conv_bufferMemory);
       } else {
         //note: andoird log
         // __android_log_print(ANDROID_LOG_INFO, "Ngising", "addnodewithparam2");
@@ -1444,9 +1436,10 @@ TfLiteStatus InterpreterBuilder::ParseNodes(
             FlatBufferIntArrayToVector(op->inputs()),
             FlatBufferIntArrayToVector(op->outputs()), nullptr, 0,
             ParseOpData(op, op_type, error_reporter_), reg,
-            context_cl, queueCL, program, 
+            context_cl, queueCL, program, cl_mem_arr,
             physicalDevice, device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, 
-            descriptorSetLayoutConv, descriptorSetLayoutMatmul, queue, queueFamilyIndex);
+            descriptorSetLayoutConv, descriptorSetLayoutMatmul, queue, queueFamilyIndex,
+            conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixSizes, conv_bufferMemory);
       }
     }
     else {

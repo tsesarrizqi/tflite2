@@ -229,9 +229,10 @@ TfLiteStatus Interpreter::AddNodeWithParametersOpenCL(
     const std::vector<int>& inputs, const std::vector<int>& outputs,
     const char* init_data, size_t init_data_size, void* builtin_data,
     const TfLiteRegistration* registration,
-    cl_context context_cl, cl_command_queue queue, cl_program program, 
+    cl_context context_cl, cl_command_queue queue, cl_program program, cl_mem cl_mem_arr[6],
     VkPhysicalDevice physicalDevice, VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, 
     VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex,
+    VkCommandPool conv_commandPool, VkCommandBuffer conv_commandBuffer, VkBuffer conv_matrixA, VkBuffer conv_matrixSizes, VkDeviceMemory conv_bufferMemory,
     int* node_index) {
   invokable_ = false;
 
@@ -260,16 +261,18 @@ TfLiteStatus Interpreter::AddNodeWithParametersOpenCL(
   node.temporaries = TfLiteIntArrayCreate(0);
   __android_log_print(ANDROID_LOG_INFO, "Ngising", "masuk interpreter");
   if (init_data) {
-    node.user_data = OpInitOpenCL(*registration, init_data, init_data_size, context_cl, queue, program,
+    node.user_data = OpInitOpenCL(*registration, init_data, init_data_size, context_cl, queue, program, cl_mem_arr,
       physicalDevice, device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, descriptorSetLayoutConv, 
-      descriptorSetLayoutMatmul, queueV, queueFamilyIndex);
+      descriptorSetLayoutMatmul, queueV, queueFamilyIndex,
+      conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixSizes, conv_bufferMemory);
   } else {
     node.user_data =
         OpInitOpenCL(*registration,
                reinterpret_cast<const char*>(builtin_data_deleter.get()), 0,
-               context_cl, queue, program,
+               context_cl, queue, program, cl_mem_arr,
                physicalDevice, device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, 
-               descriptorSetLayoutConv, descriptorSetLayoutMatmul, queueV, queueFamilyIndex);
+               descriptorSetLayoutConv, descriptorSetLayoutMatmul, queueV, queueFamilyIndex,
+               conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixSizes, conv_bufferMemory);
   }
   node.builtin_data = builtin_data_deleter.release();
   node_and_reg.second = *registration;
