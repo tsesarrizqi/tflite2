@@ -378,7 +378,7 @@ public:
         bufferMemory = bufferMemory0;
 
         matrixASize = (uint32_t) (sizeof(float) *buffsizes[0]);
-        matrixBSize = (uint32_t) (sizeof(float) *(buffsizes[1] + buffsizes[2] + 2));
+        matrixBSize = (uint32_t) (sizeof(float) *(buffsizes[1] + buffsizes[2] + 4));
         matrixCSize = (uint32_t) (sizeof(float) * buffsizes[3]);
         matrixSizesSize = sizeof(int) * 40;
         
@@ -638,7 +638,7 @@ public:
         // VK_CHECK_RESULT(vkAllocateMemory(device, &allocateInfo, NULL, &bufferMemory));
 
         float* oActMinMaxtmp;
-        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, sizeof(float)*2, 0, (void **) &oActMinMaxtmp));
+        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, sizeof(float)*4, 0, (void **) &oActMinMaxtmp));
         
         oActMinMaxtmp[0] = outputActivationMin;
         oActMinMaxtmp[1] = outputActivationMax;
@@ -652,7 +652,7 @@ public:
         filterSize = (uint32_t) (sizeof(float)*dimSizes[5]*dimSizes[6]*dimSizes[7]*numchannel);
 
         float* iDatatmp;
-        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, sizeof(float)*2, inputSizeAll, 0, (void **) &iDatatmp));
+        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, sizeof(float)*4, inputSizeAll, 0, (void **) &iDatatmp));
         
         for(int i = 0,i2=0; i < inputSize/sizeof(float); i+=numchannel,i2+=dimSizes[0]) {
           for(int j = 0; j < dimSizes[0]; j++) {
@@ -666,7 +666,7 @@ public:
         vkUnmapMemory(device, bufferMemory);
 
         float* fDatatmp;
-        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, inputSizeAll+(sizeof(float)*2), filterSizeAll, 0, (void **) &fDatatmp));
+        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, inputSizeAll+(sizeof(float)*4), filterSizeAll, 0, (void **) &fDatatmp));
         
         for(int i = 0,i2=0; i < filterSize/sizeof(float); i+=numchannel,i2+=dimSizes[0]) {
           for(int j = 0; j < dimSizes[0]; j++) {
@@ -681,7 +681,7 @@ public:
 
 
         float* bDatatmp;
-        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, inputSizeAll+(sizeof(float)*2)+filterSizeAll, biasSizeAll, 0, (void **) &bDatatmp));
+        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, inputSizeAll+(sizeof(float)*4)+filterSizeAll, biasSizeAll, 0, (void **) &bDatatmp));
         
         std::memcpy(bDatatmp, biasData, biasSize);
 
@@ -959,7 +959,7 @@ public:
     void getresult() {
         float *matCtmp;
         VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 
-            inputSizeAll+(sizeof(float)*2)+filterSizeAll+biasSizeAll, outputSizeAll, 0, (void **)&matCtmp));
+            inputSizeAll+(sizeof(float)*4)+filterSizeAll+biasSizeAll, outputSizeAll, 0, (void **)&matCtmp));
 
         std::memcpy(outputData, matCtmp, outputSize);
 

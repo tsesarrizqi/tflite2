@@ -1043,10 +1043,9 @@ void createConvPipeline() {
     "layout(binding = 0) buffer floatBuffer {  \n" \
     "    float actMin;  \n" \
     "    float actMax;  \n" \
-    "    float iData[710432];  \n" \
-    "    float fData[1548288];  \n" \
-    "    float bData[1024];  \n" \
-    "    float oData[1382976];  \n" \
+    "    float pad1;  \n" \
+    "    float pad2;  \n" \
+    "    float convFloatB[];  \n" \
     "};  \n" \
     "layout(binding = 1) readonly buffer intBuffer {  \n" \
     "    ivec4 stridePad;  \n" \
@@ -1068,17 +1067,17 @@ void createConvPipeline() {
     "              int in_y = (out_y * stridePad.y - stridePad.w) + filter_y;  \n" \
     "              if ((in_x >= 0) && (in_x < dimSizes[0].y) && (in_y >= 0) &&  \n" \
     "                  (in_y < dimSizes[0].z)) {  \n" \
-    "                total += (iData[in_channel*dimStrides[0].x + in_x*dimStrides[0].y +in_y*dimStrides[0].z + batch*dimStrides[0].w] *   \n" \
-    "                        fData[in_channel*dimStrides[1].x + filter_x*dimStrides[1].y + filter_y*dimStrides[1].z + out_channel*dimStrides[1].w]);  \n" \
+    "                total += (convFloatB[in_channel*dimStrides[0].x + in_x*dimStrides[0].y +in_y*dimStrides[0].z + batch*dimStrides[0].w] *   \n" \
+    "                        convFloatB[ifboSize.x + in_channel*dimStrides[1].x + filter_x*dimStrides[1].y + filter_y*dimStrides[1].z + out_channel*dimStrides[1].w]);  \n" \
     "              }  \n" \
     "            }  \n" \
     "          }  \n" \
     "        }  \n" \
     "        float bias_value = 0.0;  \n" \
     "        if (ifboSize.z > 0) {  \n" \
-    "          bias_value = bData[out_channel*dimStrides[2].x];  \n" \
+    "          bias_value = convFloatB[ifboSize.x + ifboSize.y + (out_channel*dimStrides[2].x)];  \n" \
     "        }  \n" \
-    "        oData[out_channel*dimStrides[3].x + out_x*dimStrides[3].y + out_y*dimStrides[3].z + batch*dimStrides[3].w] = min(max(total + bias_value,actMin),actMax);  \n" \
+    "        convFloatB[ifboSize.x + ifboSize.y + ifboSize.z + out_channel*dimStrides[3].x + out_x*dimStrides[3].y + out_y*dimStrides[3].z + batch*dimStrides[3].w] = min(max(total + bias_value,actMin),actMax);  \n" \
     "      }  \n" \
     "    }  \n" \
     "}";
@@ -1292,7 +1291,7 @@ void createMatmulPipeline() {
 
 void createConvBuffer() {
     uint32_t matrixASize = (uint32_t) (sizeof(float) *buffsizes[0]);
-    uint32_t matrixBSize = (uint32_t) (sizeof(float) *(buffsizes[1] + buffsizes[2] + 2));
+    uint32_t matrixBSize = (uint32_t) (sizeof(float) *(buffsizes[1] + buffsizes[2] + 4));
     uint32_t matrixCSize = (uint32_t) (sizeof(float) * buffsizes[3]);
     uint32_t matrixSizesSize = sizeof(int) * 40;
 
