@@ -237,6 +237,7 @@ cl_mem d_conv_dim_strides = NULL;
 VkCommandPool conv_commandPool = NULL;
 VkCommandBuffer conv_commandBuffer = NULL;
 VkBuffer conv_matrixA = NULL;
+VkBuffer conv_matrixB = NULL;
 VkBuffer conv_matrixSizes = NULL;
 VkDeviceMemory conv_bufferMemory = NULL;
 
@@ -1013,7 +1014,7 @@ void createDescriptorSetLayoutMatmul() {
 }
 
 void createDescriptorSetLayoutConv() {
-    VkDescriptorSetLayoutBinding descriptorSetLayoutBindings[2];
+    VkDescriptorSetLayoutBinding descriptorSetLayoutBindings[3];
 
     descriptorSetLayoutBindings[0] = {};
     descriptorSetLayoutBindings[0].binding = 0; // binding = 0
@@ -1027,9 +1028,15 @@ void createDescriptorSetLayoutConv() {
     descriptorSetLayoutBindings[1].descriptorCount = 1;
     descriptorSetLayoutBindings[1].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
+    descriptorSetLayoutBindings[2] = {};
+    descriptorSetLayoutBindings[2].binding = 2; // binding = 2
+    descriptorSetLayoutBindings[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    descriptorSetLayoutBindings[2].descriptorCount = 1;
+    descriptorSetLayoutBindings[2].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
     VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {};
     descriptorSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    descriptorSetLayoutCreateInfo.bindingCount = 2; // only a single binding in this descriptor set layout. 
+    descriptorSetLayoutCreateInfo.bindingCount = 3; // only a single binding in this descriptor set layout. 
     descriptorSetLayoutCreateInfo.pBindings = descriptorSetLayoutBindings; 
 
     VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCreateInfo, NULL, &descriptorSetLayoutConv));
@@ -1040,14 +1047,14 @@ void createConvPipeline() {
     "#version 450  \n" \
     "#extension GL_ARB_separate_shader_objects : enable  \n" \
     "layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in;  \n" \
-    "layout(binding = 0) buffer floatBuffer {  \n" \
-    "    float actMin;  \n" \
-    "    float actMax;  \n" \
-    "    float pad1;  \n" \
-    "    float pad2;  \n" \
-    "    float convFloatB[];  \n" \
+    "layout(binding = 0) readonly buffer aifBuffer {  \n" \
+    "    vec4 actMinMax;  \n" \
+    "    vec4 ifData[];  \n" \
     "};  \n" \
-    "layout(binding = 1) readonly buffer intBuffer {  \n" \
+    "layout(binding = 1) buffer boBuffer {  \n" \
+    "    float boData[];  \n" \
+    "};  \n" \
+    "layout(binding = 2) readonly buffer intBuffer {  \n" \
     "    ivec4 stridePad;  \n" \
     "    ivec4 dimSizes[4];  \n" \
     "    ivec4 dimStrides[4];  \n" \
@@ -1062,22 +1069,22 @@ void createConvPipeline() {
     "        float total = 0.0;  \n" \
     "        for (int filter_y = 0; filter_y < dimSizes[1].z; ++filter_y) {  \n" \
     "          for (int filter_x = 0; filter_x < dimSizes[1].y; ++filter_x) {  \n" \
-    "            for (int in_channel = 0; in_channel < dimSizes[0].x; ++in_channel) {  \n" \
+    "            for (int in_channel = 0; in_channel < dimSizes[0].x/4; ++in_channel) {  \n" \
     "              int in_x = (out_x * stridePad.x - stridePad.z) + filter_x;  \n" \
     "              int in_y = (out_y * stridePad.y - stridePad.w) + filter_y;  \n" \
     "              if ((in_x >= 0) && (in_x < dimSizes[0].y) && (in_y >= 0) &&  \n" \
     "                  (in_y < dimSizes[0].z)) {  \n" \
-    "                total += (convFloatB[in_channel*dimStrides[0].x + in_x*dimStrides[0].y +in_y*dimStrides[0].z + batch*dimStrides[0].w] *   \n" \
-    "                        convFloatB[ifboSize.x + in_channel*dimStrides[1].x + filter_x*dimStrides[1].y + filter_y*dimStrides[1].z + out_channel*dimStrides[1].w]);  \n" \
+    "                total += dot(ifData[in_channel*dimStrides[0].x + in_x*dimStrides[0].y/4 +in_y*dimStrides[0].z/4 + batch*dimStrides[0].w/4],   \n" \
+    "                        ifData[ifboSize.x/4 + in_channel*dimStrides[1].x + filter_x*dimStrides[1].y/4 + filter_y*dimStrides[1].z/4 + out_channel*dimStrides[1].w/4]);  \n" \
     "              }  \n" \
     "            }  \n" \
     "          }  \n" \
     "        }  \n" \
     "        float bias_value = 0.0;  \n" \
     "        if (ifboSize.z > 0) {  \n" \
-    "          bias_value = convFloatB[ifboSize.x + ifboSize.y + (out_channel*dimStrides[2].x)];  \n" \
+    "          bias_value = boData[out_channel*dimStrides[2].x];  \n" \
     "        }  \n" \
-    "        convFloatB[ifboSize.x + ifboSize.y + ifboSize.z + out_channel*dimStrides[3].x + out_x*dimStrides[3].y + out_y*dimStrides[3].z + batch*dimStrides[3].w] = min(max(total + bias_value,actMin),actMax);  \n" \
+    "        boData[ifboSize.z + out_channel*dimStrides[3].x + out_x*dimStrides[3].y + out_y*dimStrides[3].z + batch*dimStrides[3].w] = min(max(total + bias_value,actMinMax.x),actMinMax.y);  \n" \
     "      }  \n" \
     "    }  \n" \
     "}";
@@ -1290,18 +1297,26 @@ void createMatmulPipeline() {
 }
 
 void createConvBuffer() {
-    uint32_t matrixASize = (uint32_t) (sizeof(float) *buffsizes[0]);
-    uint32_t matrixBSize = (uint32_t) (sizeof(float) *(buffsizes[1] + buffsizes[2] + 4));
+    uint32_t matrixASize = (uint32_t) (sizeof(float) * (buffsizes[0] + buffsizes[1] + 4));
+    uint32_t matrixBSize = (uint32_t) (sizeof(float) * buffsizes[2]);
     uint32_t matrixCSize = (uint32_t) (sizeof(float) * buffsizes[3]);
     uint32_t matrixSizesSize = sizeof(int) * 40;
 
     VkBufferCreateInfo matrixACreateInfo = {};
     matrixACreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    matrixACreateInfo.size = matrixASize+matrixBSize+matrixCSize; // buffer size in bytes. 
+    matrixACreateInfo.size = matrixASize; // buffer size in bytes. 
     matrixACreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
     matrixACreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
 
     VK_CHECK_RESULT(vkCreateBuffer(device, &matrixACreateInfo, NULL, &conv_matrixA)); // create buffer.
+
+    VkBufferCreateInfo matrixBCreateInfo = {};
+    matrixBCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    matrixBCreateInfo.size = matrixBSize+matrixCSize; // buffer size in bytes. 
+    matrixBCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
+    matrixBCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
+
+    VK_CHECK_RESULT(vkCreateBuffer(device, &matrixBCreateInfo, NULL, &conv_matrixB)); // create buffer.
 
     VkBufferCreateInfo matrixSizesCreateInfo = {};
     matrixSizesCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -1311,11 +1326,12 @@ void createConvBuffer() {
 
     VK_CHECK_RESULT(vkCreateBuffer(device, &matrixSizesCreateInfo, NULL, &conv_matrixSizes)); // create buffer.
     
-    VkMemoryRequirements memoryRequirementsmatrixA, memoryRequirementsmatrixSizes;
+    VkMemoryRequirements memoryRequirementsmatrixA, memoryRequirementsmatrixB, memoryRequirementsmatrixSizes;
     vkGetBufferMemoryRequirements(device, conv_matrixA, &memoryRequirementsmatrixA);
+    vkGetBufferMemoryRequirements(device, conv_matrixB, &memoryRequirementsmatrixB);
     vkGetBufferMemoryRequirements(device, conv_matrixSizes, &memoryRequirementsmatrixSizes);
 
-    const VkDeviceSize memorySize = memoryRequirementsmatrixA.size+memoryRequirementsmatrixSizes.size;
+    const VkDeviceSize memorySize = memoryRequirementsmatrixA.size+memoryRequirementsmatrixB.size+memoryRequirementsmatrixSizes.size;
 
     VkMemoryAllocateInfo allocateInfo = {};
     allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -1327,6 +1343,7 @@ void createConvBuffer() {
     VK_CHECK_RESULT(vkAllocateMemory(device, &allocateInfo, NULL, &conv_bufferMemory));
 
     VK_CHECK_RESULT(vkBindBufferMemory(device, conv_matrixA, conv_bufferMemory, 0));
+    VK_CHECK_RESULT(vkBindBufferMemory(device, conv_matrixB, conv_bufferMemory, matrixASize));
     VK_CHECK_RESULT(vkBindBufferMemory(device, conv_matrixSizes, conv_bufferMemory, matrixASize+matrixBSize+matrixCSize));
 
     VkCommandPoolCreateInfo commandPoolCreateInfo = {};
@@ -1415,7 +1432,7 @@ TfLiteStatus InterpreterBuilder::ParseNodes(
             context_cl, queueCL, program, cl_mem_arr,
             physicalDevice, device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, 
             descriptorSetLayoutConv, descriptorSetLayoutMatmul, queue, queueFamilyIndex,
-            conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixSizes, conv_bufferMemory);
+            conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixB, conv_matrixSizes, conv_bufferMemory);
       } else {
         //note: andoird log
         // __android_log_print(ANDROID_LOG_INFO, "Ngising", "addnodewithparam2");
@@ -1430,7 +1447,7 @@ TfLiteStatus InterpreterBuilder::ParseNodes(
             context_cl, queueCL, program, cl_mem_arr,
             physicalDevice, device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, 
             descriptorSetLayoutConv, descriptorSetLayoutMatmul, queue, queueFamilyIndex,
-            conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixSizes, conv_bufferMemory);
+            conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixB, conv_matrixSizes, conv_bufferMemory);
       }
     }
     else {

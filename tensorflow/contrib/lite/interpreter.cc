@@ -232,7 +232,7 @@ TfLiteStatus Interpreter::AddNodeWithParametersOpenCL(
     cl_context context_cl, cl_command_queue queue, cl_program program, cl_mem cl_mem_arr[6],
     VkPhysicalDevice physicalDevice, VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, 
     VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex,
-    VkCommandPool conv_commandPool, VkCommandBuffer conv_commandBuffer, VkBuffer conv_matrixA, VkBuffer conv_matrixSizes, VkDeviceMemory conv_bufferMemory,
+    VkCommandPool conv_commandPool, VkCommandBuffer conv_commandBuffer, VkBuffer conv_matrixA, VkBuffer conv_matrixB, VkBuffer conv_matrixSizes, VkDeviceMemory conv_bufferMemory,
     int* node_index) {
   invokable_ = false;
 
@@ -264,7 +264,7 @@ TfLiteStatus Interpreter::AddNodeWithParametersOpenCL(
     node.user_data = OpInitOpenCL(*registration, init_data, init_data_size, context_cl, queue, program, cl_mem_arr,
       physicalDevice, device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, descriptorSetLayoutConv, 
       descriptorSetLayoutMatmul, queueV, queueFamilyIndex,
-      conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixSizes, conv_bufferMemory);
+      conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixB, conv_matrixSizes, conv_bufferMemory);
   } else {
     node.user_data =
         OpInitOpenCL(*registration,
@@ -272,7 +272,7 @@ TfLiteStatus Interpreter::AddNodeWithParametersOpenCL(
                context_cl, queue, program, cl_mem_arr,
                physicalDevice, device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, 
                descriptorSetLayoutConv, descriptorSetLayoutMatmul, queueV, queueFamilyIndex,
-               conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixSizes, conv_bufferMemory);
+               conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixB, conv_matrixSizes, conv_bufferMemory);
   }
   node.builtin_data = builtin_data_deleter.release();
   node_and_reg.second = *registration;

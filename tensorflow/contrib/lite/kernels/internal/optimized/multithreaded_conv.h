@@ -362,7 +362,7 @@ public:
           float output_activation_min, float output_activation_max,
           VkPhysicalDevice physicalDevice0, VkDevice device0, VkPipeline pipelineConv0, VkPipelineLayout pipelineLayoutConv0, 
     VkDescriptorSetLayout descriptorSetLayoutConv0, VkQueue queueV0, uint32_t queueFamilyIndex0,
-    VkCommandPool commandPool0, VkCommandBuffer commandBuffer0, VkBuffer matrixA0, VkBuffer matrixSizes0, VkDeviceMemory bufferMemory0) {
+    VkCommandPool commandPool0, VkCommandBuffer commandBuffer0, VkBuffer matrixA0, VkBuffer matrixB0, VkBuffer matrixSizes0, VkDeviceMemory bufferMemory0) {
         
         physicalDevice = physicalDevice0; 
         device = device0;
@@ -374,6 +374,7 @@ public:
         commandPool = commandPool0;
         commandBuffer = commandBuffer0;
         matrixA = matrixA0;
+        matrixB = matrixB0;
         matrixSizes = matrixSizes0;
         bufferMemory = bufferMemory0;
 
@@ -714,8 +715,8 @@ public:
 
         vkUnmapMemory(device, bufferMemory);
 
-        __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "runkernelSizeInput: %d", inputSizeAll/sizeof(float));
-        __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "runkernelSizeFilter: %d", filterSizeAll/sizeof(float));
+        // __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "runkernelSizeInput: %d", inputSizeAll/sizeof(float));
+        // __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "runkernelSizeFilter: %d", filterSizeAll/sizeof(float));
 
         // VK_CHECK_RESULT(vkBindBufferMemory(device, matrixA, bufferMemory, 0));
         // VK_CHECK_RESULT(vkBindBufferMemory(device, matrixSizes, bufferMemory, matrixASize+matrixBSize+matrixCSize));
@@ -749,7 +750,7 @@ public:
 
         descriptorPoolSize = {};
         descriptorPoolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        descriptorPoolSize.descriptorCount = 2;
+        descriptorPoolSize.descriptorCount = 3;
 
         VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {};
         descriptorPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -772,12 +773,17 @@ public:
         descriptorBufferInfoMatA.offset = 0;
         descriptorBufferInfoMatA.range = VK_WHOLE_SIZE;
 
+        VkDescriptorBufferInfo descriptorBufferInfoMatB = {};
+        descriptorBufferInfoMatB.buffer = matrixB;
+        descriptorBufferInfoMatB.offset = 0;
+        descriptorBufferInfoMatB.range = VK_WHOLE_SIZE;
+
         VkDescriptorBufferInfo descriptorBufferInfoMatSizes = {};
         descriptorBufferInfoMatSizes.buffer = matrixSizes;
         descriptorBufferInfoMatSizes.offset = 0;
         descriptorBufferInfoMatSizes.range = VK_WHOLE_SIZE;
 
-        VkWriteDescriptorSet writeDescriptorSets[2];
+        VkWriteDescriptorSet writeDescriptorSets[3];
 
         writeDescriptorSets[0] = {};
         writeDescriptorSets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -793,9 +799,17 @@ public:
         writeDescriptorSets[1].dstBinding = 1; // write to the first, and only binding.
         writeDescriptorSets[1].descriptorCount = 1; // update a single descriptor.
         writeDescriptorSets[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; // storage buffer.
-        writeDescriptorSets[1].pBufferInfo = &descriptorBufferInfoMatSizes;
+        writeDescriptorSets[1].pBufferInfo = &descriptorBufferInfoMatB;
 
-        vkUpdateDescriptorSets(device, 2, writeDescriptorSets, 0, NULL);
+        writeDescriptorSets[2] = {};
+        writeDescriptorSets[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeDescriptorSets[2].dstSet = descriptorSet; // write to this descriptor set.
+        writeDescriptorSets[2].dstBinding = 2; // write to the first, and only binding.
+        writeDescriptorSets[2].descriptorCount = 1; // update a single descriptor.
+        writeDescriptorSets[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; // storage buffer.
+        writeDescriptorSets[2].pBufferInfo = &descriptorBufferInfoMatSizes;
+
+        vkUpdateDescriptorSets(device, 3, writeDescriptorSets, 0, NULL);
     }
 
     // void createComputePipeline() {
@@ -991,7 +1005,7 @@ void vulkanTestConv(int buffsizes[4], const float* input_data, const int input_s
           float output_activation_min, float output_activation_max,
           VkPhysicalDevice physicalDevice, VkDevice device, VkPipeline pipelineConv, VkPipelineLayout pipelineLayoutConv, 
     VkDescriptorSetLayout descriptorSetLayoutConv, VkQueue queueV, uint32_t queueFamilyIndex,
-    VkCommandPool conv_commandPool, VkCommandBuffer conv_commandBuffer, VkBuffer conv_matrixA, VkBuffer conv_matrixSizes, VkDeviceMemory conv_bufferMemory) {
+    VkCommandPool conv_commandPool, VkCommandBuffer conv_commandBuffer, VkBuffer conv_matrixA, VkBuffer conv_matrixB, VkBuffer conv_matrixSizes, VkDeviceMemory conv_bufferMemory) {
 
     VulkanConvolution app;
     app.run(buffsizes, input_data,input_size,
@@ -1003,7 +1017,7 @@ void vulkanTestConv(int buffsizes[4], const float* input_data, const int input_s
           dim_sizes, dim_strides,
           output_activation_min, output_activation_max,
           physicalDevice, device, pipelineConv, pipelineLayoutConv, descriptorSetLayoutConv, queueV, queueFamilyIndex,
-          conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixSizes, conv_bufferMemory);
+          conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixB, conv_matrixSizes, conv_bufferMemory);
 }
 
 // inline void OpenCLConv(const float* input_data, int input_size,
@@ -1661,7 +1675,7 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
                  cl_context context_cl, cl_command_queue queue, cl_program program, cl_mem cl_mem_arr[6], int buffsizes[4],
                  VkPhysicalDevice physicalDevice, VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, 
     VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex,
-    VkCommandPool conv_commandPool, VkCommandBuffer conv_commandBuffer, VkBuffer conv_matrixA, VkBuffer conv_matrixSizes, VkDeviceMemory conv_bufferMemory) {
+    VkCommandPool conv_commandPool, VkCommandBuffer conv_commandBuffer, VkBuffer conv_matrixA, VkBuffer conv_matrixB, VkBuffer conv_matrixSizes, VkDeviceMemory conv_bufferMemory) {
   
   // if(kernel == NULL) {
   //   // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelmasuksekali");    
@@ -1907,7 +1921,7 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
           output_activation_min, output_activation_max,
           physicalDevice, device, pipelineConv, pipelineLayoutConv, 
           descriptorSetLayoutConv, queueV, queueFamilyIndex,
-          conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixSizes, conv_bufferMemory);
+          conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixB, conv_matrixSizes, conv_bufferMemory);
 
 
 

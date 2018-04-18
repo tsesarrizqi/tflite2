@@ -75,7 +75,7 @@ void PortableMatrixBatchVectorMultiplyAccumulateOpenCL(const float* matrix,
                                                  cl_context context_cl, cl_command_queue queue, cl_program program, cl_mem cl_mem_arr[6],
                                                  VkPhysicalDevice physicalDevice, VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, 
     VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex,
-    VkCommandPool conv_commandPool, VkCommandBuffer conv_commandBuffer, VkBuffer conv_matrixA, VkBuffer conv_matrixSizes, VkDeviceMemory conv_bufferMemory) {
+    VkCommandPool conv_commandPool, VkCommandBuffer conv_commandBuffer, VkBuffer conv_matrixA, VkBuffer conv_matrixB, VkBuffer conv_matrixSizes, VkDeviceMemory conv_bufferMemory) {
   // vector per kolom
   // matrix per baris
   // result per kolom
