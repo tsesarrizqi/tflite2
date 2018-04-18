@@ -63,8 +63,8 @@ limitations under the License.
 
 const char *kernelSource =           "\n" \
 "#pragma OPENCL EXTENSION cl_khr_fp16 : enable \n" \
-"__kernel void convhalf(__global half* input_data,    \n" \
-"          __constant half* filter_data,    \n" \
+"__kernel void convhalf(__global half4* input_data,    \n" \
+"          __constant half4* filter_data,    \n" \
 "          __global half* bias_data,    \n" \
 "          __global half* output_data,   \n" \
 "          int stride_width, int stride_height,    \n" \
@@ -86,14 +86,14 @@ const char *kernelSource =           "\n" \
 "            half total = 0.0;   \n" \
 "            for (int filter_y = 0; filter_y < dim_sizes.s6; ++filter_y) {   \n" \
 "              for (int filter_x = 0; filter_x < dim_sizes.s5; ++filter_x) {   \n" \
-"                for (int in_channel = 0; in_channel < dim_sizes.s0; ++in_channel) {   \n" \
+"                for (int in_channel = 0; in_channel < dim_sizes.s0/4; ++in_channel) {   \n" \
 "                  int in_x = (out_x * stride_width) - pad_width + filter_x;   \n" \
 "                  int in_y = (out_y * stride_height) - pad_height + filter_y;   \n" \
 "                  if ((in_x >= 0) && (in_x < dim_sizes.s1) && (in_y >= 0) &&   \n" \
 "                      (in_y < dim_sizes.s2)) {   \n" \
-"                    half input_value = input_data[in_channel*dim_strides.s0 + in_x*dim_strides.s1 + in_y*dim_strides.s2 + batch*dim_strides.s3];   \n" \
-"                    half filter_value = filter_data[in_channel*dim_strides.s4 + filter_x*dim_strides.s5 + filter_y*dim_strides.s6 + out_channel*dim_strides.s7];  \n" \
-"                    total += (input_value * filter_value);   \n" \
+"                    half4 input_value = input_data[in_channel*dim_strides.s0 + in_x*dim_strides.s1/4 + in_y*dim_strides.s2/4 + batch*dim_strides.s3/4];   \n" \
+"                    half4 filter_value = filter_data[in_channel*dim_strides.s4 + filter_x*dim_strides.s5/4 + filter_y*dim_strides.s6/4 + out_channel*dim_strides.s7/4];  \n" \
+"                    total += dot(input_value,filter_value);   \n" \
 "                  }   \n" \
 "                }   \n" \
 "              }   \n" \
@@ -106,8 +106,8 @@ const char *kernelSource =           "\n" \
 "    }  \n" \
 "}   \n" \
 "  \n" \
-"__kernel void conv(__global float* input_data,    \n" \
-"          __constant float* filter_data,    \n" \
+"__kernel void conv(__global float4* input_data,    \n" \
+"          __constant float4* filter_data,    \n" \
 "          __global float* bias_data,    \n" \
 "          __global float* output_data,   \n" \
 "          int stride_width, int stride_height,    \n" \
@@ -129,14 +129,14 @@ const char *kernelSource =           "\n" \
 "            float total = 0.0;   \n" \
 "            for (int filter_y = 0; filter_y < dim_sizes.s6; ++filter_y) {   \n" \
 "              for (int filter_x = 0; filter_x < dim_sizes.s5; ++filter_x) {   \n" \
-"                for (int in_channel = 0; in_channel < dim_sizes.s0; ++in_channel) {   \n" \
+"                for (int in_channel = 0; in_channel < dim_sizes.s0/4; ++in_channel) {   \n" \
 "                  int in_x = (out_x * stride_width) - pad_width + filter_x;   \n" \
 "                  int in_y = (out_y * stride_height) - pad_height + filter_y;   \n" \
 "                  if ((in_x >= 0) && (in_x < dim_sizes.s1) && (in_y >= 0) &&   \n" \
 "                      (in_y < dim_sizes.s2)) {   \n" \
-"                    float input_value = input_data[in_channel*dim_strides.s0 + in_x*dim_strides.s1 + in_y*dim_strides.s2 + batch*dim_strides.s3];   \n" \
-"                    float filter_value = filter_data[in_channel*dim_strides.s4 + filter_x*dim_strides.s5 + filter_y*dim_strides.s6 + out_channel*dim_strides.s7];  \n" \
-"                    total += (input_value * filter_value);   \n" \
+"                    float4 input_value = input_data[in_channel*dim_strides.s0 + in_x*dim_strides.s1/4 + in_y*dim_strides.s2/4 + batch*dim_strides.s3/4];   \n" \
+"                    float4 filter_value = filter_data[in_channel*dim_strides.s4 + filter_x*dim_strides.s5/4 + filter_y*dim_strides.s6/4 + out_channel*dim_strides.s7/4];  \n" \
+"                    total += dot(input_value,filter_value);   \n" \
 "                  }   \n" \
 "                }   \n" \
 "              }   \n" \
@@ -867,10 +867,10 @@ void initOpenCL() {
       
   // kernel = clCreateKernel(program, "convhalf", NULL);
 
-  d_conv_input = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[0]*sizeof(cl_half), NULL, NULL);
-  d_conv_filter = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[1]*sizeof(cl_half), NULL, NULL);
-  d_conv_bias = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[2]*sizeof(cl_half), NULL, NULL);
-  d_conv_output = clCreateBuffer(context_cl, CL_MEM_WRITE_ONLY, buffsizes[3]*sizeof(cl_half), NULL, NULL);
+  d_conv_input = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[0]*sizeof(float), NULL, NULL);
+  d_conv_filter = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[1]*sizeof(float), NULL, NULL);
+  d_conv_bias = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[2]*sizeof(float), NULL, NULL);
+  d_conv_output = clCreateBuffer(context_cl, CL_MEM_WRITE_ONLY, buffsizes[3]*sizeof(float), NULL, NULL);
   d_conv_dim_sizes = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, 16*sizeof(int), NULL, NULL);
   d_conv_dim_strides = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, 16*sizeof(int), NULL, NULL);
 
@@ -1043,7 +1043,10 @@ void createConvPipeline() {
     "layout(binding = 0) buffer floatBuffer {  \n" \
     "    float actMin;  \n" \
     "    float actMax;  \n" \
-    "    float convFloatB[];  \n" \
+    "    float iData[710432];  \n" \
+    "    float fData[1548288];  \n" \
+    "    float bData[1024];  \n" \
+    "    float oData[1382976];  \n" \
     "};  \n" \
     "layout(binding = 1) readonly buffer intBuffer {  \n" \
     "    ivec4 stridePad;  \n" \
@@ -1065,20 +1068,77 @@ void createConvPipeline() {
     "              int in_y = (out_y * stridePad.y - stridePad.w) + filter_y;  \n" \
     "              if ((in_x >= 0) && (in_x < dimSizes[0].y) && (in_y >= 0) &&  \n" \
     "                  (in_y < dimSizes[0].z)) {  \n" \
-    "                total += (convFloatB[in_channel*dimStrides[0].x + in_x*dimStrides[0].y +in_y*dimStrides[0].z + batch*dimStrides[0].w] *   \n" \
-    "                        convFloatB[ifboSize.x + in_channel*dimStrides[1].x + filter_x*dimStrides[1].y + filter_y*dimStrides[1].z + out_channel*dimStrides[1].w]);  \n" \
+    "                total += (iData[in_channel*dimStrides[0].x + in_x*dimStrides[0].y +in_y*dimStrides[0].z + batch*dimStrides[0].w] *   \n" \
+    "                        fData[in_channel*dimStrides[1].x + filter_x*dimStrides[1].y + filter_y*dimStrides[1].z + out_channel*dimStrides[1].w]);  \n" \
     "              }  \n" \
     "            }  \n" \
     "          }  \n" \
     "        }  \n" \
     "        float bias_value = 0.0;  \n" \
     "        if (ifboSize.z > 0) {  \n" \
-    "          bias_value = convFloatB[ifboSize.x + ifboSize.y + (out_channel*dimStrides[2].x)];  \n" \
+    "          bias_value = bData[out_channel*dimStrides[2].x];  \n" \
     "        }  \n" \
-    "        convFloatB[ifboSize.x + ifboSize.y + ifboSize.z + out_channel*dimStrides[3].x + out_x*dimStrides[3].y + out_y*dimStrides[3].z + batch*dimStrides[3].w] = min(max(total + bias_value,actMin),actMax);  \n" \
+    "        oData[out_channel*dimStrides[3].x + out_x*dimStrides[3].y + out_y*dimStrides[3].z + batch*dimStrides[3].w] = min(max(total + bias_value,actMin),actMax);  \n" \
     "      }  \n" \
     "    }  \n" \
     "}";
+
+    //     std::string source =
+    // "#version 450  \n" \
+    // "#extension GL_ARB_separate_shader_objects : enable  \n" \
+    // "layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in;  \n" \
+    // "layout(binding = 0) buffer floatBuffer {  \n" \
+    // "    float actMin;  \n" \
+    // "    float actMax;  \n" \
+    // "    vec4 convFloatB[];  \n" \
+    // "};  \n" \
+    // "layout(binding = 1) readonly buffer intBuffer {  \n" \
+    // "    ivec4 stridePad;  \n" \
+    // "    ivec4 dimSizes[4];  \n" \
+    // "    ivec4 dimStrides[4];  \n" \
+    // "    ivec4 ifboSize;  \n" \
+    // "};  \n" \
+    // "void main() {  \n" \
+    // "    int out_channel = int(gl_GlobalInvocationID.x);   \n" \
+    // "    int out_y = int(gl_GlobalInvocationID.y);   \n" \
+    // "    int out_x = int(gl_GlobalInvocationID.z);   \n" \
+    // "    if((out_channel < dimSizes[1].w) && (out_x < dimSizes[3].y) && (out_y < dimSizes[3].z)) {  \n" \
+    // "      for(int batch = 0; batch < dimSizes[0].w; ++batch) { \n" \
+    // "        float total = 0.0;  \n" \
+    // "        for (int filter_y = 0; filter_y < dimSizes[1].z; ++filter_y) {  \n" \
+    // "          for (int filter_x = 0; filter_x < dimSizes[1].y; ++filter_x) {  \n" \
+    // "            for (int in_channel = 0; in_channel < dimSizes[0].x/4; ++in_channel) {  \n" \
+    // "              int in_x = (out_x * stridePad.x - stridePad.z) + filter_x;  \n" \
+    // "              int in_y = (out_y * stridePad.y - stridePad.w) + filter_y;  \n" \
+    // "              if ((in_x >= 0) && (in_x < dimSizes[0].y) && (in_y >= 0) &&  \n" \
+    // "                  (in_y < dimSizes[0].z)) {  \n" \
+    // "                vec4 input_data = convFloatB[in_channel*dimStrides[0].x + in_x*dimStrides[0].y/4 +in_y*dimStrides[0].z/4 + batch*dimStrides[0].w/4]; \n" \
+    // "                vec4 filter_data = convFloatB[ifboSize.x/4 + in_channel*dimStrides[1].x + filter_x*dimStrides[1].y/4 + filter_y*dimStrides[1].z/4 + out_channel*dimStrides[1].w/4]; \n" \
+    // "                total += dot(input_data, filter_data); \n" \
+    // "              }  \n" \
+    // "            }  \n" \
+    // "          }  \n" \
+    // "        }  \n" \
+    // "        float bias_value = 0.0;  \n" \
+    // "        int tmp = (out_channel*dimStrides[2].x); \n" \
+    // "        if (ifboSize.z > 0) {  \n" \
+    // "          switch (int(mod(tmp,4))) {      \n" \
+    // "              case 0: bias_value = convFloatB[ifboSize.x/4 + ifboSize.y/4 + tmp/4].x; break;      \n" \
+    // "              case 1: bias_value = convFloatB[ifboSize.x/4 + ifboSize.y/4 + tmp/4].y; break;      \n" \
+    // "              case 2: bias_value = convFloatB[ifboSize.x/4 + ifboSize.y/4 + tmp/4].z; break;      \n" \
+    // "              case 3: bias_value = convFloatB[ifboSize.x/4 + ifboSize.y/4 + tmp/4].w; break;      \n" \
+    // "          }      \n" \
+    // "        }  \n" \
+    // "        tmp = (out_channel*dimStrides[3].x + out_x*dimStrides[3].y + out_y*dimStrides[3].z + batch*dimStrides[3].w); \n" \
+    // "        switch (int(mod(tmp,4))) {      \n" \
+    // "            case 0: convFloatB[ifboSize.x/4 + ifboSize.y/4 + ifboSize.z/4 + tmp/4].x = min(max(total + bias_value,actMin),actMax); break;      \n" \
+    // "            case 1: convFloatB[ifboSize.x/4 + ifboSize.y/4 + ifboSize.z/4 + tmp/4].y = min(max(total + bias_value,actMin),actMax); break;      \n" \
+    // "            case 2: convFloatB[ifboSize.x/4 + ifboSize.y/4 + ifboSize.z/4 + tmp/4].z = min(max(total + bias_value,actMin),actMax); break;      \n" \
+    // "            case 3: convFloatB[ifboSize.x/4 + ifboSize.y/4 + ifboSize.z/4 + tmp/4].w = min(max(total + bias_value,actMin),actMax); break;      \n" \
+    // "        }      \n" \
+    // "      }  \n" \
+    // "    }  \n" \
+    // "}";
 
     shaderc::Compiler compiler;
     shaderc::CompileOptions options;
@@ -1186,74 +1246,6 @@ void createMatmulPipeline() {
       "        } \n" \
       "    } \n" \
       "}";
-
-    // std::string source =
-    //   "#version 450   \n" \
-    //   "#extension GL_ARB_separate_shader_objects : enable   \n" \
-    //   "layout(local_size_x = 8, local_size_y = 32, local_size_z = 1) in;   \n" \
-    //   "layout(binding = 0) buffer matrixA {   \n" \
-    //   "    int M; \n" \
-    //   "    int K; \n" \
-    //   "    int N; \n" \
-    //   "    int tmp; \n" \
-    //   "    vec4 matrixAll[];   \n" \
-    //   "};   \n" \
-    //   "const int TS = 32;  \n" \
-    //   "const int WIDTH = 4;  \n" \
-    //   "shared vec4 Asub[TS][TS/WIDTH];       \n" \
-    //   "shared vec4 Bsub[TS][TS/WIDTH];  \n" \
-    //   "void main() {           \n" \
-    //   "    const int row = int(gl_LocalInvocationID.x);     \n" \
-    //   "    const int col = int(gl_LocalInvocationID.y);     \n" \
-    //   "    const int globalRow = (TS/WIDTH) * int(gl_WorkGroupID.x) + row;     \n" \
-    //   "    const int globalCol = TS * int(gl_WorkGroupID.y) + col;      \n" \
-    //   "    vec4 acc = { 0.0, 0.0, 0.0, 0.0 };       \n" \
-    //   "    const int numTiles = K/TS;   \n" \
-    //   "    for (int t=0; t<numTiles; t++) {          \n" \
-    //   "        const int tiledRow = (TS/WIDTH)*t + row;       \n" \
-    //   "        const int tiledCol = TS*t + col;       \n" \
-    //   "        if(globalRow < (M/WIDTH)) {      \n" \
-    //   "          Asub[col][row] = matrixAll[tiledCol*(M/WIDTH) + globalRow];      \n" \
-    //   "        }       \n" \
-    //   "        else {      \n" \
-    //   "           vec4 tmp = { 0.0, 0.0, 0.0, 0.0 };   \n" \
-    //   "           Asub[col][row] = tmp;      \n" \
-    //   "        }      \n" \
-    //   "        if(globalCol < N) {      \n" \
-    //   "          Bsub[col][row] = matrixAll[(M*K/4) + globalCol*(K/WIDTH) + tiledRow];      \n" \
-    //   "        }       \n" \
-    //   "        else {      \n" \
-    //   "           vec4 tmp = { 0.0, 0.0, 0.0, 0.0 };   \n" \
-    //   "           Bsub[col][row] = tmp;      \n" \
-    //   "        }      \n" \
-    //   "        barrier();       \n" \
-    //   "        if(globalCol < N) {  \n" \
-    //   "          vec4 vecA;  \n" \
-    //   "          vec4 vecB;       \n" \
-    //   "          float valB;       \n" \
-    //   "          for (int k=0; k<TS/WIDTH; k++) {       \n" \
-    //   "              vecB = Bsub[col][k];       \n" \
-    //   "              for (int w=0; w<WIDTH; w++) {       \n" \
-    //   "                  vecA = Asub[WIDTH*k + w][row];       \n" \
-    //   "                  switch (w) {       \n" \
-    //   "                      case 0: valB = vecB.x; break;       \n" \
-    //   "                      case 1: valB = vecB.y; break;       \n" \
-    //   "                      case 2: valB = vecB.z; break;       \n" \
-    //   "                      case 3: valB = vecB.w; break;       \n" \
-    //   "                  }       \n" \
-    //   "                  acc.x += vecA.x * valB;       \n" \
-    //   "                  acc.y += vecA.y * valB;       \n" \
-    //   "                  acc.z += vecA.z * valB;       \n" \
-    //   "                  acc.w += vecA.w * valB;       \n" \
-    //   "              }      \n" \
-    //   "          }       \n" \
-    //   "        }       \n" \
-    //   "        barrier();       \n" \
-    //   "    }              \n" \
-    //   "    if((globalCol < N) && (globalRow < (M/WIDTH))) {         \n" \
-    //   "      matrixAll[(M*K/4) + (K*N/4) + globalCol*(M/WIDTH) + globalRow] = acc;      \n" \
-    //   "    }           \n" \
-    //   "}";
 
     shaderc::Compiler compiler;
     shaderc::CompileOptions options;

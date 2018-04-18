@@ -97,6 +97,17 @@ struct OpData {
 // static int buffsizes[4] = {0,0,0,0};
 int buffsizes[4] = {710432, 1548288, 1024, 1382976};
 
+int buffsizes4[4] = {0,0,0,0};
+// inputSizeconv.cc: 710432
+// filterSizeconv.cc: 1548288
+// biasSizeconv.cc: 448
+// outputSizeconv.cc: 1382976
+
+// inputSizeconv.cc: 401408
+// filterSizeconv.cc: 1048576
+// biasSizeconv.cc: 1024
+// outputSizeconv.cc: 802816
+
 cl_context context_cl_global = NULL;       
 cl_command_queue queue_global = NULL;
 cl_program program_global = NULL;
@@ -416,19 +427,21 @@ TfLiteStatus Prepare(TfLiteContext* context, TfLiteNode* node) {
   // Check input channels matching filter
   TF_LITE_ENSURE_EQ(context, input->dims->data[3], filter->dims->data[3]);
 
-  int input_size1 = input->dims->data[0]*input->dims->data[1]*input->dims->data[2]*input->dims->data[3];
-  int filter_size1 = filter->dims->data[0]*filter->dims->data[1]*filter->dims->data[2]*filter->dims->data[3];
+  int numchannel = input->dims->data[3]+((4-((input->dims->data[3])%4))%4);
+
+  int input_size1 = input->dims->data[0]*input->dims->data[1]*input->dims->data[2]*numchannel;
+  int filter_size1 = filter->dims->data[0]*filter->dims->data[1]*filter->dims->data[2]*numchannel;
   int output_size1 = output->dims->data[0]*output->dims->data[1]*output->dims->data[2]*output->dims->data[3];
 
-  // if(buffsizes[0] < input_size1) {
-  //   buffsizes[0] = input_size1;
-  // }
-  // if(buffsizes[1] < filter_size1) {
-  //   buffsizes[1] = filter_size1;
-  // }
-  // if(buffsizes[3] < output_size1) {
-  //   buffsizes[3] = output_size1;
-  // }
+  if(buffsizes4[0] < input_size1) {
+    buffsizes4[0] = input_size1;
+  }
+  if(buffsizes4[1] < filter_size1) {
+    buffsizes4[1] = filter_size1;
+  }
+  if(buffsizes4[3] < output_size1) {
+    buffsizes4[3] = output_size1;
+  }
 
 
 
@@ -456,19 +469,19 @@ TfLiteStatus Prepare(TfLiteContext* context, TfLiteNode* node) {
     }
 
     bias_size = bias->dims->data[0];
-    // if(buffsizes[2] < bias_size) {
-    //   buffsizes[2] = bias_size;
-    // }
+    if(buffsizes4[2] < bias_size) {
+      buffsizes4[2] = bias_size;
+    }
     
 
     TF_LITE_ENSURE_EQ(context, bias->dims->size, 1);
     TF_LITE_ENSURE_EQ(context, bias->dims->data[0], filter->dims->data[0]);
   }
 
-  // __android_log_print(ANDROID_LOG_INFO, "VectorSize", "inputSizeconv.cc: %d",buffsizes[0]);
-  // __android_log_print(ANDROID_LOG_INFO, "VectorSize", "filterSizeconv.cc: %d",buffsizes[1]);
-  // __android_log_print(ANDROID_LOG_INFO, "VectorSize", "biasSizeconv.cc: %d",buffsizes[2]);
-  // __android_log_print(ANDROID_LOG_INFO, "VectorSize", "outputSizeconv.cc: %d",buffsizes[3]);
+  __android_log_print(ANDROID_LOG_INFO, "VectorSize", "inputSizeconv.cc: %d",buffsizes4[0]);
+  __android_log_print(ANDROID_LOG_INFO, "VectorSize", "filterSizeconv.cc: %d",buffsizes4[1]);
+  __android_log_print(ANDROID_LOG_INFO, "VectorSize", "biasSizeconv.cc: %d",buffsizes4[2]);
+  __android_log_print(ANDROID_LOG_INFO, "VectorSize", "outputSizeconv.cc: %d",buffsizes4[3]);
 
   int channels_out = filter->dims->data[0];
   int width = input->dims->data[2];
@@ -677,7 +690,7 @@ void EvalFloat(TfLiteContext* context, TfLiteNode* node,
     //     GetTensorDims(output), GetTensorData<float>(im2col),
     //     GetTensorDims(im2col));
     multithreaded_ops::ConvOpenCL(
-        GetTensorData<float>(input), GetTensorDims(input), filter_data,
+        GetTensorData<float>(input), GetTensorDims(input), GetTensorData<float>(filter),
         GetTensorDims(filter), GetTensorData<float>(bias), GetTensorDims(bias),
         params->stride_width, params->stride_height, data->padding.width,
         data->padding.height, params->padding, output_activation_min,

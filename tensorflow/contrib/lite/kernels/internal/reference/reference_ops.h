@@ -30,6 +30,12 @@ limitations under the License.
 #include "tensorflow/contrib/lite/kernels/internal/round.h"
 #include "tensorflow/contrib/lite/kernels/internal/types.h"
 
+//note: android log
+#include <android/log.h> 
+#include <stdio.h> 
+#include <stdlib.h> 
+#include <math.h>
+
 namespace tflite {
 namespace reference_ops {
 
@@ -162,6 +168,7 @@ inline void Conv(const float* input_data, const Dims<4>& input_dims,
                  float output_activation_max, float* output_data,
                  const Dims<4>& output_dims, float* im2col_data,
                  const Dims<4>& im2col_dims) {
+  __android_log_print(ANDROID_LOG_INFO, "trackconv", "reference conv4");
   (void)im2col_data;  // only used in optimized code.
   (void)im2col_dims;  // only used in optimized code.
   const int batches = MatchingArraySize(input_dims, 3, output_dims, 3);
@@ -224,6 +231,7 @@ void Conv(const float* input_data, const Dims<4>& input_dims,
           int stride_height, int pad_width, int pad_height, float* output_data,
           const Dims<4>& output_dims, float* im2col_data,
           const Dims<4>& im2col_dims) {
+  __android_log_print(ANDROID_LOG_INFO, "trackconv", "reference conv2");
   float output_activation_min, output_activation_max;
   GetActivationMinMax(Ac, &output_activation_min, &output_activation_max);
   Conv(input_data, input_dims, filter_data, filter_dims, bias_data, bias_dims,
@@ -240,6 +248,7 @@ void Conv(const float* input_data, const Dims<4>& input_dims,
           int pad_width, int pad_height, float* output_data,
           const Dims<4>& output_dims, float* im2col_data,
           const Dims<4>& im2col_dims) {
+  __android_log_print(ANDROID_LOG_INFO, "trackconv", "reference conv3");
   Conv<Ac>(input_data, input_dims, filter_data, filter_dims, bias_data,
            bias_dims, stride, stride, pad_width, pad_height, output_data,
            output_dims, im2col_data, im2col_dims);
