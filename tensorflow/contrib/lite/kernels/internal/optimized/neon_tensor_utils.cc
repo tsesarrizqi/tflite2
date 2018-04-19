@@ -913,7 +913,7 @@ public:
 
         VkBufferCreateInfo matrixACreateInfo = {};
         matrixACreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        matrixACreateInfo.size = matrixASize+matrixSizesSize; // buffer size in bytes. 
+        matrixACreateInfo.size = matrixASize; // buffer size in bytes. 
         matrixACreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
         matrixACreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
 
@@ -935,12 +935,21 @@ public:
 
         VK_CHECK_RESULT(vkCreateBuffer(device, &matrixCCreateInfo, NULL, &matrixC)); // create buffer.
 
-        VkMemoryRequirements memoryRequirementsmatrixA, memoryRequirementsmatrixB, memoryRequirementsmatrixC;
+        VkBufferCreateInfo matrixSizesCreateInfo = {};
+        matrixSizesCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        matrixSizesCreateInfo.size = matrixSizesSize; // buffer size in bytes. 
+        matrixSizesCreateInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT; // buffer is used as a storage buffer.
+        matrixSizesCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
+
+        VK_CHECK_RESULT(vkCreateBuffer(device, &matrixSizesCreateInfo, NULL, &matrixSizes)); // create buffer.
+
+        VkMemoryRequirements memoryRequirementsmatrixA, memoryRequirementsmatrixB, memoryRequirementsmatrixC, memoryRequirementsmatrixSizes;
         vkGetBufferMemoryRequirements(device, matrixA, &memoryRequirementsmatrixA);
         vkGetBufferMemoryRequirements(device, matrixB, &memoryRequirementsmatrixB);
         vkGetBufferMemoryRequirements(device, matrixC, &memoryRequirementsmatrixC);
+        vkGetBufferMemoryRequirements(device, matrixSizes, &memoryRequirementsmatrixSizes);
         
-        const VkDeviceSize memorySize = memoryRequirementsmatrixA.size+memoryRequirementsmatrixB.size+memoryRequirementsmatrixC.size;
+        const VkDeviceSize memorySize = memoryRequirementsmatrixA.size+memoryRequirementsmatrixB.size+memoryRequirementsmatrixC.size+memoryRequirementsmatrixSizes.size;
 
         VkMemoryAllocateInfo allocateInfo = {};
         allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -951,17 +960,8 @@ public:
 
         VK_CHECK_RESULT(vkAllocateMemory(device, &allocateInfo, NULL, &bufferMemory));
 
-        int* matSizetmp;
-        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, matrixSizesSize, 0, (void **) &matSizetmp));
-
-        matSizetmp[0] = M;
-        matSizetmp[1] = K;
-        matSizetmp[2] = N;
-
-        vkUnmapMemory(device, bufferMemory);
-
         float* matBuffertmp;
-        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, matrixSizesSize, matrixASize+matrixBSize+matrixCSize, 0, (void **) &matBuffertmp));
+        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, matrixASize+matrixBSize+matrixCSize, 0, (void **) &matBuffertmp));
         // VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, matrixASize+matrixBSize+matrixCSize+matrixSizesSize, 0, (void **) &matBuffertmp));
 
         // matBuffertmp[0] = M;
@@ -980,9 +980,20 @@ public:
 
         vkUnmapMemory(device, bufferMemory);
 
+        int* matSizetmp;
+        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, matrixASize+matrixBSize+matrixCSize, matrixSizesSize, 0, (void **) &matSizetmp));
+
+        matSizetmp[0] = M;
+        matSizetmp[1] = K;
+        matSizetmp[2] = N;
+        matSizetmp[3] = 0;
+
+        vkUnmapMemory(device, bufferMemory);
+
         VK_CHECK_RESULT(vkBindBufferMemory(device, matrixA, bufferMemory, 0));
-        VK_CHECK_RESULT(vkBindBufferMemory(device, matrixB, bufferMemory, matrixASize+matrixSizesSize));
-        VK_CHECK_RESULT(vkBindBufferMemory(device, matrixC, bufferMemory, matrixASize+matrixSizesSize+matrixBSize));
+        VK_CHECK_RESULT(vkBindBufferMemory(device, matrixB, bufferMemory, matrixASize));
+        VK_CHECK_RESULT(vkBindBufferMemory(device, matrixC, bufferMemory, matrixASize+matrixBSize));
+        VK_CHECK_RESULT(vkBindBufferMemory(device, matrixSizes, bufferMemory, matrixASize+matrixBSize+matrixCSize));
     }
 
     // void createDescriptorSetLayout() {
@@ -1004,17 +1015,21 @@ public:
 
     void createDescriptorSet() {
 
-        VkDescriptorPoolSize descriptorPoolSize;
+        VkDescriptorPoolSize descriptorPoolSize[2];
 
-        descriptorPoolSize = {};
-        descriptorPoolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        descriptorPoolSize.descriptorCount = 3;
+        descriptorPoolSize[0] = {};
+        descriptorPoolSize[0].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        descriptorPoolSize[0].descriptorCount = 3;
+
+        descriptorPoolSize[1] = {};
+        descriptorPoolSize[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptorPoolSize[1].descriptorCount = 1;
 
         VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {};
         descriptorPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         descriptorPoolCreateInfo.maxSets = 1; // we only need to allocate one descriptor set from the pool.
-        descriptorPoolCreateInfo.poolSizeCount = 1;
-        descriptorPoolCreateInfo.pPoolSizes = &descriptorPoolSize;
+        descriptorPoolCreateInfo.poolSizeCount = 2;
+        descriptorPoolCreateInfo.pPoolSizes = descriptorPoolSize;
 
         VK_CHECK_RESULT(vkCreateDescriptorPool(device, &descriptorPoolCreateInfo, NULL, &descriptorPool));
 
@@ -1041,7 +1056,12 @@ public:
         descriptorBufferInfoMatC.offset = 0;
         descriptorBufferInfoMatC.range = VK_WHOLE_SIZE;
 
-        VkWriteDescriptorSet writeDescriptorSets[3];
+        VkDescriptorBufferInfo descriptorBufferInfoMatSizes = {};
+        descriptorBufferInfoMatSizes.buffer = matrixSizes;
+        descriptorBufferInfoMatSizes.offset = 0;
+        descriptorBufferInfoMatSizes.range = VK_WHOLE_SIZE;
+
+        VkWriteDescriptorSet writeDescriptorSets[4];
 
         writeDescriptorSets[0] = {};
         writeDescriptorSets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -1067,7 +1087,15 @@ public:
         writeDescriptorSets[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; // storage buffer.
         writeDescriptorSets[2].pBufferInfo = &descriptorBufferInfoMatC;
 
-        vkUpdateDescriptorSets(device, 3, writeDescriptorSets, 0, NULL);
+        writeDescriptorSets[3] = {};
+        writeDescriptorSets[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeDescriptorSets[3].dstSet = descriptorSet; // write to this descriptor set.
+        writeDescriptorSets[3].dstBinding = 3; // write to the first, and only binding.
+        writeDescriptorSets[3].descriptorCount = 1; // update a single descriptor.
+        writeDescriptorSets[3].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER; // storage buffer.
+        writeDescriptorSets[3].pBufferInfo = &descriptorBufferInfoMatSizes;
+
+        vkUpdateDescriptorSets(device, 4, writeDescriptorSets, 0, NULL);
     }
 
     // void createComputePipeline() {
@@ -1197,7 +1225,7 @@ public:
 
     void getresult() {
         float *matCtmp;
-        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, matrixASize+matrixBSize+matrixSizesSize, matrixCSize, 0, (void **)&matCtmp));
+        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, matrixASize+matrixBSize, matrixCSize, 0, (void **)&matCtmp));
       
         // float sumC = 0.0;
         for (int k = 0; k < M; k++) {

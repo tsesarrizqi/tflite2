@@ -999,7 +999,7 @@ uint32_t findMemoryType(VkDeviceSize memorySize, VkMemoryPropertyFlags propertie
 }
 
 void createDescriptorSetLayoutMatmul() {
-    VkDescriptorSetLayoutBinding descriptorSetLayoutBindings[3];
+    VkDescriptorSetLayoutBinding descriptorSetLayoutBindings[4];
 
     descriptorSetLayoutBindings[0] = {};
     descriptorSetLayoutBindings[0].binding = 0; // binding = 0
@@ -1019,9 +1019,15 @@ void createDescriptorSetLayoutMatmul() {
     descriptorSetLayoutBindings[2].descriptorCount = 1;
     descriptorSetLayoutBindings[2].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
+    descriptorSetLayoutBindings[3] = {};
+    descriptorSetLayoutBindings[3].binding = 3; // binding = 2
+    descriptorSetLayoutBindings[3].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    descriptorSetLayoutBindings[3].descriptorCount = 1;
+    descriptorSetLayoutBindings[3].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
     VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {};
     descriptorSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    descriptorSetLayoutCreateInfo.bindingCount = 3; // only a single binding in this descriptor set layout. 
+    descriptorSetLayoutCreateInfo.bindingCount = 4; // only a single binding in this descriptor set layout. 
     descriptorSetLayoutCreateInfo.pBindings = descriptorSetLayoutBindings; 
 
     VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCreateInfo, NULL, &descriptorSetLayoutMatmul));
@@ -1236,10 +1242,6 @@ void createMatmulPipeline() {
       "#extension GL_ARB_separate_shader_objects : enable \n" \
       "layout(local_size_x = 8, local_size_y = 32, local_size_z = 1) in; \n" \
       "layout(binding = 0) readonly buffer matrixA { \n" \
-      "    int m_rows; \n" \
-      "    int m_cols; \n" \
-      "    int n_batch; \n" \
-      "    int pad; \n" \
       "    vec4 matrix[]; \n" \
       "}; \n" \
       "layout(binding = 1) readonly buffer matrixB { \n" \
@@ -1247,6 +1249,12 @@ void createMatmulPipeline() {
       "}; \n" \
       "layout(binding = 2) buffer matrixC { \n" \
       "    vec4 result[]; \n" \
+      "}; \n" \
+      "layout(binding = 3) uniform UniformBufferObject { \n" \
+      "    int m_rows; \n" \
+      "    int m_cols; \n" \
+      "    int n_batch; \n" \
+      "    int pad; \n" \
       "}; \n" \
       "shared vec4 Aacc[8][32]; \n" \
       "void main() { \n" \
