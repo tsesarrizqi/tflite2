@@ -1528,7 +1528,7 @@ inline void Conv(const float* input_data, const Dims<4>& input_dims,
   double cpu = cpu1 - cpu0;
 
   // note: andoird log
-  __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelMultithread: %lf", wall);
+  __android_log_print(ANDROID_LOG_INFO, "Convruntime", "walltimeMultithread: %lf", wall);
 }
 
 inline void Conv2(const float* input_data, const Dims<4>& input_dims,
@@ -1677,19 +1677,19 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
     VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex,
     VkCommandPool conv_commandPool, VkCommandBuffer conv_commandBuffer, VkBuffer conv_matrixA, VkBuffer conv_matrixB, VkBuffer conv_matrixSizes, VkDeviceMemory conv_bufferMemory) {
   
-  // if(kernel == NULL) {
-  //   // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelmasuksekali");    
+  if(kernel == NULL) {
+    // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelmasuksekali");    
       
-  //   kernel = clCreateKernel(program, "conv", NULL);
+    kernel = clCreateKernel(program, "conv", NULL);
 
-  //   // d_input = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[0]*sizeof(half), NULL, NULL);
-  //   // d_filter = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[1]*sizeof(half), NULL, NULL);
-  //   // d_bias = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[2]*sizeof(half), NULL, NULL);
-  //   // d_output = clCreateBuffer(context_cl, CL_MEM_WRITE_ONLY, buffsizes[3]*sizeof(half), NULL, NULL);
-  //   // d_dim_sizes = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, 16*sizeof(int), NULL, NULL);
-  //   // d_dim_strides = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, 16*sizeof(int), NULL, NULL);
+    // d_input = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[0]*sizeof(half), NULL, NULL);
+    // d_filter = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[1]*sizeof(half), NULL, NULL);
+    // d_bias = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[2]*sizeof(half), NULL, NULL);
+    // d_output = clCreateBuffer(context_cl, CL_MEM_WRITE_ONLY, buffsizes[3]*sizeof(half), NULL, NULL);
+    // d_dim_sizes = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, 16*sizeof(int), NULL, NULL);
+    // d_dim_strides = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, 16*sizeof(int), NULL, NULL);
 
-  // }
+  }
 
 
 
@@ -1888,15 +1888,15 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
     //       half_cast<half>(output_activation_min), half_cast<half>(output_activation_max),
     //       context_cl, queue, program, cl_mem_arr);
 
-        // OpenCLConv(input_data, input_size,
-        //   filter_data, filter_size,
-        //   bias_data, bias_size,
-        //   output_data, output_size,
-        //   stride_width, stride_height, 
-        //   pad_width, pad_height, 
-        //   sizes, strides,
-        //   output_activation_min, output_activation_max,
-        //   context_cl, queue, program, cl_mem_arr);
+        OpenCLConv(input_data, input_size,
+          filter_data, filter_size,
+          bias_data, bias_size,
+          output_data, output_size,
+          stride_width, stride_height, 
+          pad_width, pad_height, 
+          sizes, strides,
+          output_activation_min, output_activation_max,
+          context_cl, queue, program, cl_mem_arr);
 
   // for(int i = 0; i < output_size; i++) {
   //   // half halfTmp(vector[i]);
@@ -1911,17 +1911,17 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
   // double wall0 = get_wall_time();
   // double cpu0  = get_cpu_time();
 
-  vulkanTestConv(buffsizes, input_data, input_size,
-          filter_data, filter_size,
-          bias_data, bias_size,
-          output_data, output_size,
-          stride_width, stride_height, 
-          pad_width, pad_height, 
-          sizes, strides,
-          output_activation_min, output_activation_max,
-          physicalDevice, device, pipelineConv, pipelineLayoutConv, 
-          descriptorSetLayoutConv, queueV, queueFamilyIndex,
-          conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixB, conv_matrixSizes, conv_bufferMemory);
+  // vulkanTestConv(buffsizes, input_data, input_size,
+  //         filter_data, filter_size,
+  //         bias_data, bias_size,
+  //         output_data, output_size,
+  //         stride_width, stride_height, 
+  //         pad_width, pad_height, 
+  //         sizes, strides,
+  //         output_activation_min, output_activation_max,
+  //         physicalDevice, device, pipelineConv, pipelineLayoutConv, 
+  //         descriptorSetLayoutConv, queueV, queueFamilyIndex,
+  //         conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixB, conv_matrixSizes, conv_bufferMemory);
 
 
 

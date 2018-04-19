@@ -196,25 +196,27 @@ const char *kernelSource =           "\n" \
 "    int n_batch)    \n" \
 "{  \n" \
 "    int row = get_global_id(0)*4; \n" \
+"    int localidx0 = get_local_id(0); \n" \
 "    int localidx = get_local_id(1); \n" \
-"    __local float4 Aacc[32]; \n" \
+"    __local float4 Aacc[8][32]; \n" \
 "    if (row < m_rows) { \n" \
 "        float4 sum = {0.0, 0.0, 0.0, 0.0}; \n" \
 "        int starti = localidx*(m_cols/128); \n" \
-"        for(int i = starti; i < starti+(m_cols/128); i++){ \n" \
+"        for(int i = starti; i < (starti+(m_cols/128)); i++){ \n" \
 "            float4 currb = vector[i];\n" \
 "            sum.x += dot(matrix[(row*m_cols/4) + i],currb);\n" \
 "            sum.y += dot(matrix[((row+1)*m_cols/4) + i],currb); \n" \
 "            sum.z += dot(matrix[((row+2)*m_cols/4) + i],currb);\n" \
 "            sum.w += dot(matrix[((row+3)*m_cols/4) + i],currb);\n" \
 "        } \n" \
-"        Aacc[localidx] = sum; \n" \
-"        barrier(CLK_LOCAL_MEM_FENCE);      \n" \
+"        Aacc[localidx0][localidx] = sum; \n" \
+"        barrier(CLK_LOCAL_MEM_FENCE);    \n" \
 "        if(localidx == 0) { \n" \
-"            result[row/4] = Aacc[0] + Aacc[1] + Aacc[2] + Aacc[3] + Aacc[4] + Aacc[5] + Aacc[6] + Aacc[7]+ \n" \
-"            Aacc[8] + Aacc[9] + Aacc[10] + Aacc[11] + Aacc[12] + Aacc[13] + Aacc[14] + Aacc[15]+ \n" \
-"            Aacc[16] + Aacc[17] + Aacc[18] + Aacc[19] + Aacc[20] + Aacc[21] + Aacc[22] + Aacc[23]+ \n" \
-"            Aacc[24] + Aacc[25] + Aacc[26] + Aacc[27] + Aacc[28] + Aacc[29] + Aacc[30] + Aacc[31]; \n" \
+"          float4 total = {0.0, 0.0, 0.0, 0.0};    \n" \
+"          for(int i = 0; i < 32; i++) {    \n" \
+"            total += Aacc[localidx0][i]; \n" \
+"          } \n" \
+"          result[row/4] = total;\n" \
 "        } \n" \
 "    } \n" \
 "} \n" \
@@ -997,18 +999,30 @@ uint32_t findMemoryType(VkDeviceSize memorySize, VkMemoryPropertyFlags propertie
 }
 
 void createDescriptorSetLayoutMatmul() {
-    VkDescriptorSetLayoutBinding descriptorSetLayoutBinding;
+    VkDescriptorSetLayoutBinding descriptorSetLayoutBindings[3];
 
-    descriptorSetLayoutBinding = {};
-    descriptorSetLayoutBinding.binding = 0; // binding = 0
-    descriptorSetLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    descriptorSetLayoutBinding.descriptorCount = 1;
-    descriptorSetLayoutBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    descriptorSetLayoutBindings[0] = {};
+    descriptorSetLayoutBindings[0].binding = 0; // binding = 0
+    descriptorSetLayoutBindings[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    descriptorSetLayoutBindings[0].descriptorCount = 1;
+    descriptorSetLayoutBindings[0].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+    descriptorSetLayoutBindings[1] = {};
+    descriptorSetLayoutBindings[1].binding = 1; // binding = 1
+    descriptorSetLayoutBindings[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    descriptorSetLayoutBindings[1].descriptorCount = 1;
+    descriptorSetLayoutBindings[1].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+    descriptorSetLayoutBindings[2] = {};
+    descriptorSetLayoutBindings[2].binding = 2; // binding = 2
+    descriptorSetLayoutBindings[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    descriptorSetLayoutBindings[2].descriptorCount = 1;
+    descriptorSetLayoutBindings[2].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
     VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {};
     descriptorSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    descriptorSetLayoutCreateInfo.bindingCount = 1; // only a single binding in this descriptor set layout. 
-    descriptorSetLayoutCreateInfo.pBindings = &descriptorSetLayoutBinding; 
+    descriptorSetLayoutCreateInfo.bindingCount = 3; // only a single binding in this descriptor set layout. 
+    descriptorSetLayoutCreateInfo.pBindings = descriptorSetLayoutBindings; 
 
     VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCreateInfo, NULL, &descriptorSetLayoutMatmul));
 }
@@ -1221,34 +1235,42 @@ void createMatmulPipeline() {
       "#version 450 \n" \
       "#extension GL_ARB_separate_shader_objects : enable \n" \
       "layout(local_size_x = 8, local_size_y = 32, local_size_z = 1) in; \n" \
-      "layout(binding = 0) buffer matrixA { \n" \
-      "    int mM; \n" \
-      "    int kK; \n" \
-      "    int nN; \n" \
-      "    int tmp; \n" \
-      "    vec4 aA[]; \n" \
+      "layout(binding = 0) readonly buffer matrixA { \n" \
+      "    int m_rows; \n" \
+      "    int m_cols; \n" \
+      "    int n_batch; \n" \
+      "    int pad; \n" \
+      "    vec4 matrix[]; \n" \
       "}; \n" \
-      "shared vec4 Acc[32]; \n" \
+      "layout(binding = 1) readonly buffer matrixB { \n" \
+      "    vec4 vector[]; \n" \
+      "}; \n" \
+      "layout(binding = 2) buffer matrixC { \n" \
+      "    vec4 result[]; \n" \
+      "}; \n" \
+      "shared vec4 Aacc[8][32]; \n" \
       "void main() { \n" \
       "    int row = int(gl_GlobalInvocationID.x)*4; \n" \
+      "    int localidx0 = int(gl_LocalInvocationID.x); \n" \
       "    int localidx = int(gl_LocalInvocationID.y); \n" \
-      "    if (row < mM) { \n" \
+      "    if (row < m_rows) { \n" \
       "        vec4 sum = {0.0, 0.0, 0.0, 0.0}; \n" \
-      "        int starti = localidx*(kK/128); \n" \
-      "        for(int i = starti; i < starti+(kK/128); i++) { \n" \
-      "            vec4 currb = aA[(mM*kK/4) + i];\n" \
-      "            sum.x += dot(aA[(row*kK/4) + i],currb);\n" \
-      "            sum.y += dot(aA[((row+1)*kK/4) + i],currb); \n" \
-      "            sum.z += dot(aA[((row+2)*kK/4) + i],currb);\n" \
-      "            sum.w += dot(aA[((row+3)*kK/4) + i],currb);\n" \
+      "        int starti = localidx*(m_cols/128); \n" \
+      "        for(int i = starti; i < (starti+(m_cols/128)); i++){ \n" \
+      "            vec4 currb = vector[i];\n" \
+      "            sum.x += dot(matrix[(row*m_cols/4) + i],currb);\n" \
+      "            sum.y += dot(matrix[((row+1)*m_cols/4) + i],currb); \n" \
+      "            sum.z += dot(matrix[((row+2)*m_cols/4) + i],currb);\n" \
+      "            sum.w += dot(matrix[((row+3)*m_cols/4) + i],currb);\n" \
       "        } \n" \
-      "        Acc[localidx] = sum; \n" \
-      "        barrier();      \n" \
+      "        Aacc[localidx0][localidx] = sum; \n" \
+      "        barrier();    \n" \
       "        if(localidx == 0) { \n" \
-      "            aA[(mM*kK/4) + (kK/4) + (row/4)] = Acc[0] + Acc[1] + Acc[2] + Acc[3] + Acc[4] + Acc[5] + Acc[6] + Acc[7]+ \n" \
-      "            Acc[8] + Acc[9] + Acc[10] + Acc[11] + Acc[12] + Acc[13] + Acc[14] + Acc[15]+ \n" \
-      "            Acc[16] + Acc[17] + Acc[18] + Acc[19] + Acc[20] + Acc[21] + Acc[22] + Acc[23]+ \n" \
-      "            Acc[24] + Acc[25] + Acc[26] + Acc[27] + Acc[28] + Acc[29] + Acc[30] + Acc[31]; \n" \
+      "          vec4 total = {0.0, 0.0, 0.0, 0.0};    \n" \
+      "          for(int i = 0; i < 32; i++) {    \n" \
+      "            total += Aacc[localidx0][i]; \n" \
+      "          } \n" \
+      "          result[row/4] = total;\n" \
       "        } \n" \
       "    } \n" \
       "}";
