@@ -1010,7 +1010,7 @@ void createDescriptorSetLayoutMatmul() {
 
     descriptorSetLayoutBindings[1] = {};
     descriptorSetLayoutBindings[1].binding = 1; // binding = 1
-    descriptorSetLayoutBindings[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    descriptorSetLayoutBindings[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     descriptorSetLayoutBindings[1].descriptorCount = 1;
     descriptorSetLayoutBindings[1].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
@@ -1254,8 +1254,8 @@ void createMatmulPipeline() {
       "layout(binding = 0) readonly buffer matrixA { \n" \
       "    vec4 matrix[]; \n" \
       "}; \n" \
-      "layout(binding = 1) readonly buffer matrixB { \n" \
-      "    vec4 vector[]; \n" \
+      "layout(binding = 1) uniform matrixB { \n" \
+      "    vec4 vector[512]; \n" \
       "}; \n" \
       "layout(binding = 2) buffer matrixC { \n" \
       "    vec4 result[]; \n" \
@@ -1419,12 +1419,12 @@ void initVulkan() {
     __android_log_print(ANDROID_LOG_INFO, "VulkanInit", "findPhysicalDevice");
     createDevice();
     __android_log_print(ANDROID_LOG_INFO, "VulkanInit", "createDevice");
-    // createDescriptorSetLayoutMatmul();
-    // __android_log_print(ANDROID_LOG_INFO, "VulkanInit", "createDescriptorSetLayoutMatmul");
+    createDescriptorSetLayoutMatmul();
+    __android_log_print(ANDROID_LOG_INFO, "VulkanInit", "createDescriptorSetLayoutMatmul");
     createDescriptorSetLayoutConv();
     __android_log_print(ANDROID_LOG_INFO, "VulkanInit", "createDescriptorSetLayoutConv");
-    // createMatmulPipeline();
-    // __android_log_print(ANDROID_LOG_INFO, "VulkanInit", "createMatmulPipeline");
+    createMatmulPipeline();
+    __android_log_print(ANDROID_LOG_INFO, "VulkanInit", "createMatmulPipeline");
     createConvPipeline();
     __android_log_print(ANDROID_LOG_INFO, "VulkanInit", "createConvPipeline");
     createConvBuffer();

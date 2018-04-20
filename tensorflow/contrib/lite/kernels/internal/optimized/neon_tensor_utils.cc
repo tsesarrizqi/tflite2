@@ -1019,11 +1019,11 @@ public:
 
         descriptorPoolSize[0] = {};
         descriptorPoolSize[0].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        descriptorPoolSize[0].descriptorCount = 3;
+        descriptorPoolSize[0].descriptorCount = 2;
 
         descriptorPoolSize[1] = {};
         descriptorPoolSize[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        descriptorPoolSize[1].descriptorCount = 1;
+        descriptorPoolSize[1].descriptorCount = 2;
 
         VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {};
         descriptorPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -1076,7 +1076,7 @@ public:
         writeDescriptorSets[1].dstSet = descriptorSet; // write to this descriptor set.
         writeDescriptorSets[1].dstBinding = 1; // write to the first, and only binding.
         writeDescriptorSets[1].descriptorCount = 1; // update a single descriptor.
-        writeDescriptorSets[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; // storage buffer.
+        writeDescriptorSets[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER; // storage buffer.
         writeDescriptorSets[1].pBufferInfo = &descriptorBufferInfoMatB;
 
         writeDescriptorSets[2] = {};
