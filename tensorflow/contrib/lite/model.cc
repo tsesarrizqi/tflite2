@@ -240,6 +240,7 @@ VkCommandPool conv_commandPool = NULL;
 VkCommandBuffer conv_commandBuffer = NULL;
 VkBuffer conv_matrixA = NULL;
 VkBuffer conv_matrixB = NULL;
+VkBuffer conv_matrixC = NULL;
 VkBuffer conv_matrixSizes = NULL;
 VkDeviceMemory conv_bufferMemory = NULL;
 
@@ -1034,7 +1035,7 @@ void createDescriptorSetLayoutMatmul() {
 }
 
 void createDescriptorSetLayoutConv() {
-    VkDescriptorSetLayoutBinding descriptorSetLayoutBindings[3];
+    VkDescriptorSetLayoutBinding descriptorSetLayoutBindings[4];
 
     descriptorSetLayoutBindings[0] = {};
     descriptorSetLayoutBindings[0].binding = 0; // binding = 0
@@ -1054,9 +1055,15 @@ void createDescriptorSetLayoutConv() {
     descriptorSetLayoutBindings[2].descriptorCount = 1;
     descriptorSetLayoutBindings[2].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
+    descriptorSetLayoutBindings[3] = {};
+    descriptorSetLayoutBindings[3].binding = 3; // binding = 2
+    descriptorSetLayoutBindings[3].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    descriptorSetLayoutBindings[3].descriptorCount = 1;
+    descriptorSetLayoutBindings[3].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
     VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {};
     descriptorSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    descriptorSetLayoutCreateInfo.bindingCount = 3; // only a single binding in this descriptor set layout. 
+    descriptorSetLayoutCreateInfo.bindingCount = 4; // only a single binding in this descriptor set layout. 
     descriptorSetLayoutCreateInfo.pBindings = descriptorSetLayoutBindings; 
 
     VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCreateInfo, NULL, &descriptorSetLayoutConv));
@@ -1067,14 +1074,17 @@ void createConvPipeline() {
     "#version 450  \n" \
     "#extension GL_ARB_separate_shader_objects : enable  \n" \
     "layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in;  \n" \
-    "layout(binding = 0) readonly buffer aifBuffer {  \n" \
-    "    vec4 actMinMax;  \n" \
+    "layout(binding = 0) readonly buffer ifBuffer {  \n" \
     "    vec4 ifData[];  \n" \
     "};  \n" \
-    "layout(binding = 1) buffer boBuffer {  \n" \
-    "    float boData[];  \n" \
+    "layout(binding = 1) readonly buffer bBuffer {  \n" \
+    "    float bData[];  \n" \
     "};  \n" \
-    "layout(binding = 2) readonly buffer intBuffer {  \n" \
+    "layout(binding = 2) buffer oBuffer {  \n" \
+    "    float oData[];  \n" \
+    "};  \n" \
+    "layout(binding = 3) uniform UniformBufferObject {  \n" \
+    "    vec4 actMinMax;  \n" \
     "    ivec4 stridePad;  \n" \
     "    ivec4 dimSizes[4];  \n" \
     "    ivec4 dimStrides[4];  \n" \
@@ -1102,9 +1112,9 @@ void createConvPipeline() {
     "        }  \n" \
     "        float bias_value = 0.0;  \n" \
     "        if (ifboSize.z > 0) {  \n" \
-    "          bias_value = boData[out_channel*dimStrides[2].x];  \n" \
+    "          bias_value = bData[out_channel*dimStrides[2].x];  \n" \
     "        }  \n" \
-    "        boData[ifboSize.z + out_channel*dimStrides[3].x + out_x*dimStrides[3].y + out_y*dimStrides[3].z + batch*dimStrides[3].w] = min(max(total + bias_value,actMinMax.x),actMinMax.y);  \n" \
+    "        oData[out_channel*dimStrides[3].x + out_x*dimStrides[3].y + out_y*dimStrides[3].z + batch*dimStrides[3].w] = min(max(total + bias_value,actMinMax.x),actMinMax.y);  \n" \
     "      }  \n" \
     "    }  \n" \
     "}";
@@ -1327,10 +1337,10 @@ void createMatmulPipeline() {
 }
 
 void createConvBuffer() {
-    uint32_t matrixASize = (uint32_t) (sizeof(float) * (buffsizes[0] + buffsizes[1] + 4));
+    uint32_t matrixASize = (uint32_t) (sizeof(float) * (buffsizes[0] + buffsizes[1]));
     uint32_t matrixBSize = (uint32_t) (sizeof(float) * buffsizes[2]);
     uint32_t matrixCSize = (uint32_t) (sizeof(float) * buffsizes[3]);
-    uint32_t matrixSizesSize = sizeof(int) * 40;
+    uint32_t matrixSizesSize = (uint32_t) ((sizeof(int) * 40) + (sizeof(float) * 4));
 
     VkBufferCreateInfo matrixACreateInfo = {};
     matrixACreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -1342,26 +1352,36 @@ void createConvBuffer() {
 
     VkBufferCreateInfo matrixBCreateInfo = {};
     matrixBCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    matrixBCreateInfo.size = matrixBSize+matrixCSize; // buffer size in bytes. 
+    matrixBCreateInfo.size = matrixBSize; // buffer size in bytes. 
     matrixBCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
     matrixBCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
 
     VK_CHECK_RESULT(vkCreateBuffer(device, &matrixBCreateInfo, NULL, &conv_matrixB)); // create buffer.
 
+    VkBufferCreateInfo matrixCCreateInfo = {};
+    matrixCCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    matrixCCreateInfo.size = matrixCSize; // buffer size in bytes. 
+    matrixCCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
+    matrixCCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
+
+    VK_CHECK_RESULT(vkCreateBuffer(device, &matrixCCreateInfo, NULL, &conv_matrixC)); // create buffer.
+
     VkBufferCreateInfo matrixSizesCreateInfo = {};
     matrixSizesCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     matrixSizesCreateInfo.size = matrixSizesSize; // buffer size in bytes. 
-    matrixSizesCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
+    matrixSizesCreateInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT; // buffer is used as a storage buffer.
     matrixSizesCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
 
     VK_CHECK_RESULT(vkCreateBuffer(device, &matrixSizesCreateInfo, NULL, &conv_matrixSizes)); // create buffer.
     
-    VkMemoryRequirements memoryRequirementsmatrixA, memoryRequirementsmatrixB, memoryRequirementsmatrixSizes;
+    VkMemoryRequirements memoryRequirementsmatrixA, memoryRequirementsmatrixB, memoryRequirementsmatrixC, memoryRequirementsmatrixSizes;
     vkGetBufferMemoryRequirements(device, conv_matrixA, &memoryRequirementsmatrixA);
     vkGetBufferMemoryRequirements(device, conv_matrixB, &memoryRequirementsmatrixB);
+    vkGetBufferMemoryRequirements(device, conv_matrixC, &memoryRequirementsmatrixC);
     vkGetBufferMemoryRequirements(device, conv_matrixSizes, &memoryRequirementsmatrixSizes);
 
-    const VkDeviceSize memorySize = memoryRequirementsmatrixA.size+memoryRequirementsmatrixB.size+memoryRequirementsmatrixSizes.size;
+    const VkDeviceSize memorySize = memoryRequirementsmatrixA.size+memoryRequirementsmatrixB.size+
+                                  memoryRequirementsmatrixC.size+memoryRequirementsmatrixSizes.size;
 
     VkMemoryAllocateInfo allocateInfo = {};
     allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -1374,6 +1394,7 @@ void createConvBuffer() {
 
     VK_CHECK_RESULT(vkBindBufferMemory(device, conv_matrixA, conv_bufferMemory, 0));
     VK_CHECK_RESULT(vkBindBufferMemory(device, conv_matrixB, conv_bufferMemory, matrixASize));
+    VK_CHECK_RESULT(vkBindBufferMemory(device, conv_matrixC, conv_bufferMemory, matrixASize+matrixBSize));
     VK_CHECK_RESULT(vkBindBufferMemory(device, conv_matrixSizes, conv_bufferMemory, matrixASize+matrixBSize+matrixCSize));
 
     VkCommandPoolCreateInfo commandPoolCreateInfo = {};
@@ -1398,12 +1419,12 @@ void initVulkan() {
     __android_log_print(ANDROID_LOG_INFO, "VulkanInit", "findPhysicalDevice");
     createDevice();
     __android_log_print(ANDROID_LOG_INFO, "VulkanInit", "createDevice");
-    createDescriptorSetLayoutMatmul();
-    __android_log_print(ANDROID_LOG_INFO, "VulkanInit", "createDescriptorSetLayoutMatmul");
+    // createDescriptorSetLayoutMatmul();
+    // __android_log_print(ANDROID_LOG_INFO, "VulkanInit", "createDescriptorSetLayoutMatmul");
     createDescriptorSetLayoutConv();
     __android_log_print(ANDROID_LOG_INFO, "VulkanInit", "createDescriptorSetLayoutConv");
-    createMatmulPipeline();
-    __android_log_print(ANDROID_LOG_INFO, "VulkanInit", "createMatmulPipeline");
+    // createMatmulPipeline();
+    // __android_log_print(ANDROID_LOG_INFO, "VulkanInit", "createMatmulPipeline");
     createConvPipeline();
     __android_log_print(ANDROID_LOG_INFO, "VulkanInit", "createConvPipeline");
     createConvBuffer();
@@ -1462,7 +1483,7 @@ TfLiteStatus InterpreterBuilder::ParseNodes(
             context_cl, queueCL, program, cl_mem_arr,
             physicalDevice, device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, 
             descriptorSetLayoutConv, descriptorSetLayoutMatmul, queue, queueFamilyIndex,
-            conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixB, conv_matrixSizes, conv_bufferMemory);
+            conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixB, conv_matrixC, conv_matrixSizes, conv_bufferMemory);
       } else {
         //note: andoird log
         // __android_log_print(ANDROID_LOG_INFO, "Ngising", "addnodewithparam2");
@@ -1477,7 +1498,7 @@ TfLiteStatus InterpreterBuilder::ParseNodes(
             context_cl, queueCL, program, cl_mem_arr,
             physicalDevice, device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, 
             descriptorSetLayoutConv, descriptorSetLayoutMatmul, queue, queueFamilyIndex,
-            conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixB, conv_matrixSizes, conv_bufferMemory);
+            conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixB, conv_matrixC, conv_matrixSizes, conv_bufferMemory);
       }
     }
     else {

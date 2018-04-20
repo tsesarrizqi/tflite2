@@ -362,7 +362,7 @@ public:
           float output_activation_min, float output_activation_max,
           VkPhysicalDevice physicalDevice0, VkDevice device0, VkPipeline pipelineConv0, VkPipelineLayout pipelineLayoutConv0, 
     VkDescriptorSetLayout descriptorSetLayoutConv0, VkQueue queueV0, uint32_t queueFamilyIndex0,
-    VkCommandPool commandPool0, VkCommandBuffer commandBuffer0, VkBuffer matrixA0, VkBuffer matrixB0, VkBuffer matrixSizes0, VkDeviceMemory bufferMemory0) {
+    VkCommandPool commandPool0, VkCommandBuffer commandBuffer0, VkBuffer matrixA0, VkBuffer matrixB0, VkBuffer matrixC0, VkBuffer matrixSizes0, VkDeviceMemory bufferMemory0) {
         
         physicalDevice = physicalDevice0; 
         device = device0;
@@ -375,13 +375,14 @@ public:
         commandBuffer = commandBuffer0;
         matrixA = matrixA0;
         matrixB = matrixB0;
+        matrixC = matrixC0;
         matrixSizes = matrixSizes0;
         bufferMemory = bufferMemory0;
 
-        matrixASize = (uint32_t) (sizeof(float) *buffsizes[0]);
-        matrixBSize = (uint32_t) (sizeof(float) *(buffsizes[1] + buffsizes[2] + 4));
+        matrixASize = (uint32_t) (sizeof(float) *buffsizes[0]+buffsizes[1]);
+        matrixBSize = (uint32_t) (sizeof(float) *buffsizes[2]);
         matrixCSize = (uint32_t) (sizeof(float) * buffsizes[3]);
-        matrixSizesSize = sizeof(int) * 40;
+        matrixSizesSize = (uint32_t) ((sizeof(int) * 40) + (sizeof(float) * 4));
         
         inputSize = (uint32_t) (sizeof(float)*input_size);
         filterSize = (uint32_t) (sizeof(float)*filter_size);
@@ -638,14 +639,6 @@ public:
 
         // VK_CHECK_RESULT(vkAllocateMemory(device, &allocateInfo, NULL, &bufferMemory));
 
-        float* oActMinMaxtmp;
-        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, sizeof(float)*4, 0, (void **) &oActMinMaxtmp));
-        
-        oActMinMaxtmp[0] = outputActivationMin;
-        oActMinMaxtmp[1] = outputActivationMax;
-
-        vkUnmapMemory(device, bufferMemory);
-
         int numchannel = dimSizes[0];
         int addslot = (4-(numchannel%4))%4;
         numchannel = numchannel + addslot;
@@ -653,7 +646,7 @@ public:
         filterSize = (uint32_t) (sizeof(float)*dimSizes[5]*dimSizes[6]*dimSizes[7]*numchannel);
 
         float* iDatatmp;
-        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, sizeof(float)*4, inputSizeAll, 0, (void **) &iDatatmp));
+        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, inputSizeAll, 0, (void **) &iDatatmp));
         
         for(int i = 0,i2=0; i < inputSize/sizeof(float); i+=numchannel,i2+=dimSizes[0]) {
           for(int j = 0; j < dimSizes[0]; j++) {
@@ -667,7 +660,7 @@ public:
         vkUnmapMemory(device, bufferMemory);
 
         float* fDatatmp;
-        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, inputSizeAll+(sizeof(float)*4), filterSizeAll, 0, (void **) &fDatatmp));
+        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, inputSizeAll, filterSizeAll, 0, (void **) &fDatatmp));
         
         for(int i = 0,i2=0; i < filterSize/sizeof(float); i+=numchannel,i2+=dimSizes[0]) {
           for(int j = 0; j < dimSizes[0]; j++) {
@@ -680,12 +673,21 @@ public:
 
         vkUnmapMemory(device, bufferMemory);
 
-
         float* bDatatmp;
-        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, inputSizeAll+(sizeof(float)*4)+filterSizeAll, biasSizeAll, 0, (void **) &bDatatmp));
+        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, inputSizeAll+filterSizeAll, biasSizeAll, 0, (void **) &bDatatmp));
         
         std::memcpy(bDatatmp, biasData, biasSize);
 
+        vkUnmapMemory(device, bufferMemory);
+
+        float* act;
+        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, inputSizeAll+filterSizeAll+biasSizeAll+outputSizeAll, 4*sizeof(float), 0, (void **) &act));
+
+        act[0] = outputActivationMin;
+        act[1] = outputActivationMax;
+        act[2] = 0;
+        act[3] = 0;
+        
         vkUnmapMemory(device, bufferMemory);
 
         dimStrides[1] = (dimStrides[1]/dimSizes[0])*numchannel;
@@ -698,7 +700,7 @@ public:
         dimSizes[4] = numchannel;
 
         int* stridepaddimstmp;
-        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, matrixASize+matrixBSize+matrixCSize, matrixSizesSize, 0, (void **) &stridepaddimstmp));
+        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, inputSizeAll+filterSizeAll+biasSizeAll+outputSizeAll+(4*sizeof(float)), 40*sizeof(int), 0, (void **) &stridepaddimstmp));
         
         stridepaddimstmp[0] = strideWidth;
         stridepaddimstmp[1] = strideHeight;
@@ -746,17 +748,21 @@ public:
     // }
 
     void createDescriptorSet() {
-        VkDescriptorPoolSize descriptorPoolSize;
+        VkDescriptorPoolSize descriptorPoolSize[2];
 
-        descriptorPoolSize = {};
-        descriptorPoolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        descriptorPoolSize.descriptorCount = 3;
+        descriptorPoolSize[0] = {};
+        descriptorPoolSize[0].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        descriptorPoolSize[0].descriptorCount = 3;
+
+        descriptorPoolSize[1] = {};
+        descriptorPoolSize[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptorPoolSize[1].descriptorCount = 1;
 
         VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {};
         descriptorPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         descriptorPoolCreateInfo.maxSets = 1; // we only need to allocate one descriptor set from the pool.
-        descriptorPoolCreateInfo.poolSizeCount = 1;
-        descriptorPoolCreateInfo.pPoolSizes = &descriptorPoolSize;
+        descriptorPoolCreateInfo.poolSizeCount = 2;
+        descriptorPoolCreateInfo.pPoolSizes = descriptorPoolSize;
 
         VK_CHECK_RESULT(vkCreateDescriptorPool(device, &descriptorPoolCreateInfo, NULL, &descriptorPool));
 
@@ -778,12 +784,17 @@ public:
         descriptorBufferInfoMatB.offset = 0;
         descriptorBufferInfoMatB.range = VK_WHOLE_SIZE;
 
+        VkDescriptorBufferInfo descriptorBufferInfoMatC = {};
+        descriptorBufferInfoMatC.buffer = matrixC;
+        descriptorBufferInfoMatC.offset = 0;
+        descriptorBufferInfoMatC.range = VK_WHOLE_SIZE;
+
         VkDescriptorBufferInfo descriptorBufferInfoMatSizes = {};
         descriptorBufferInfoMatSizes.buffer = matrixSizes;
         descriptorBufferInfoMatSizes.offset = 0;
         descriptorBufferInfoMatSizes.range = VK_WHOLE_SIZE;
 
-        VkWriteDescriptorSet writeDescriptorSets[3];
+        VkWriteDescriptorSet writeDescriptorSets[4];
 
         writeDescriptorSets[0] = {};
         writeDescriptorSets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -807,9 +818,17 @@ public:
         writeDescriptorSets[2].dstBinding = 2; // write to the first, and only binding.
         writeDescriptorSets[2].descriptorCount = 1; // update a single descriptor.
         writeDescriptorSets[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; // storage buffer.
-        writeDescriptorSets[2].pBufferInfo = &descriptorBufferInfoMatSizes;
+        writeDescriptorSets[2].pBufferInfo = &descriptorBufferInfoMatC;
 
-        vkUpdateDescriptorSets(device, 3, writeDescriptorSets, 0, NULL);
+        writeDescriptorSets[3] = {};
+        writeDescriptorSets[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeDescriptorSets[3].dstSet = descriptorSet; // write to this descriptor set.
+        writeDescriptorSets[3].dstBinding = 3; // write to the first, and only binding.
+        writeDescriptorSets[3].descriptorCount = 1; // update a single descriptor.
+        writeDescriptorSets[3].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER; // storage buffer.
+        writeDescriptorSets[3].pBufferInfo = &descriptorBufferInfoMatSizes;
+
+        vkUpdateDescriptorSets(device, 4, writeDescriptorSets, 0, NULL);
     }
 
     // void createComputePipeline() {
@@ -972,8 +991,7 @@ public:
 
     void getresult() {
         float *matCtmp;
-        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 
-            inputSizeAll+(sizeof(float)*4)+filterSizeAll+biasSizeAll, outputSizeAll, 0, (void **)&matCtmp));
+        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory,inputSizeAll+filterSizeAll+biasSizeAll, outputSizeAll, 0, (void **)&matCtmp));
 
         std::memcpy(outputData, matCtmp, outputSize);
 
@@ -1005,7 +1023,7 @@ void vulkanTestConv(int buffsizes[4], const float* input_data, const int input_s
           float output_activation_min, float output_activation_max,
           VkPhysicalDevice physicalDevice, VkDevice device, VkPipeline pipelineConv, VkPipelineLayout pipelineLayoutConv, 
     VkDescriptorSetLayout descriptorSetLayoutConv, VkQueue queueV, uint32_t queueFamilyIndex,
-    VkCommandPool conv_commandPool, VkCommandBuffer conv_commandBuffer, VkBuffer conv_matrixA, VkBuffer conv_matrixB, VkBuffer conv_matrixSizes, VkDeviceMemory conv_bufferMemory) {
+    VkCommandPool conv_commandPool, VkCommandBuffer conv_commandBuffer, VkBuffer conv_matrixA, VkBuffer conv_matrixB, VkBuffer conv_matrixC, VkBuffer conv_matrixSizes, VkDeviceMemory conv_bufferMemory) {
 
     VulkanConvolution app;
     app.run(buffsizes, input_data,input_size,
@@ -1017,7 +1035,7 @@ void vulkanTestConv(int buffsizes[4], const float* input_data, const int input_s
           dim_sizes, dim_strides,
           output_activation_min, output_activation_max,
           physicalDevice, device, pipelineConv, pipelineLayoutConv, descriptorSetLayoutConv, queueV, queueFamilyIndex,
-          conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixB, conv_matrixSizes, conv_bufferMemory);
+          conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixB, conv_matrixC, conv_matrixSizes, conv_bufferMemory);
 }
 
 // inline void OpenCLConv(const float* input_data, int input_size,
@@ -1675,21 +1693,21 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
                  cl_context context_cl, cl_command_queue queue, cl_program program, cl_mem cl_mem_arr[6], int buffsizes[4],
                  VkPhysicalDevice physicalDevice, VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, 
     VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex,
-    VkCommandPool conv_commandPool, VkCommandBuffer conv_commandBuffer, VkBuffer conv_matrixA, VkBuffer conv_matrixB, VkBuffer conv_matrixSizes, VkDeviceMemory conv_bufferMemory) {
+    VkCommandPool conv_commandPool, VkCommandBuffer conv_commandBuffer, VkBuffer conv_matrixA, VkBuffer conv_matrixB, VkBuffer conv_matrixC, VkBuffer conv_matrixSizes, VkDeviceMemory conv_bufferMemory) {
   
-  if(kernel == NULL) {
-    // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelmasuksekali");    
+  // if(kernel == NULL) {
+  //   // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelmasuksekali");    
       
-    kernel = clCreateKernel(program, "conv", NULL);
+  //   kernel = clCreateKernel(program, "conv", NULL);
 
-    // d_input = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[0]*sizeof(half), NULL, NULL);
-    // d_filter = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[1]*sizeof(half), NULL, NULL);
-    // d_bias = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[2]*sizeof(half), NULL, NULL);
-    // d_output = clCreateBuffer(context_cl, CL_MEM_WRITE_ONLY, buffsizes[3]*sizeof(half), NULL, NULL);
-    // d_dim_sizes = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, 16*sizeof(int), NULL, NULL);
-    // d_dim_strides = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, 16*sizeof(int), NULL, NULL);
+  //   // d_input = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[0]*sizeof(half), NULL, NULL);
+  //   // d_filter = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[1]*sizeof(half), NULL, NULL);
+  //   // d_bias = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[2]*sizeof(half), NULL, NULL);
+  //   // d_output = clCreateBuffer(context_cl, CL_MEM_WRITE_ONLY, buffsizes[3]*sizeof(half), NULL, NULL);
+  //   // d_dim_sizes = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, 16*sizeof(int), NULL, NULL);
+  //   // d_dim_strides = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, 16*sizeof(int), NULL, NULL);
 
-  }
+  // }
 
 
 
@@ -1888,15 +1906,15 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
     //       half_cast<half>(output_activation_min), half_cast<half>(output_activation_max),
     //       context_cl, queue, program, cl_mem_arr);
 
-        OpenCLConv(input_data, input_size,
-          filter_data, filter_size,
-          bias_data, bias_size,
-          output_data, output_size,
-          stride_width, stride_height, 
-          pad_width, pad_height, 
-          sizes, strides,
-          output_activation_min, output_activation_max,
-          context_cl, queue, program, cl_mem_arr);
+        // OpenCLConv(input_data, input_size,
+        //   filter_data, filter_size,
+        //   bias_data, bias_size,
+        //   output_data, output_size,
+        //   stride_width, stride_height, 
+        //   pad_width, pad_height, 
+        //   sizes, strides,
+        //   output_activation_min, output_activation_max,
+        //   context_cl, queue, program, cl_mem_arr);
 
   // for(int i = 0; i < output_size; i++) {
   //   // half halfTmp(vector[i]);
@@ -1911,19 +1929,17 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
   // double wall0 = get_wall_time();
   // double cpu0  = get_cpu_time();
 
-  // vulkanTestConv(buffsizes, input_data, input_size,
-  //         filter_data, filter_size,
-  //         bias_data, bias_size,
-  //         output_data, output_size,
-  //         stride_width, stride_height, 
-  //         pad_width, pad_height, 
-  //         sizes, strides,
-  //         output_activation_min, output_activation_max,
-  //         physicalDevice, device, pipelineConv, pipelineLayoutConv, 
-  //         descriptorSetLayoutConv, queueV, queueFamilyIndex,
-  //         conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixB, conv_matrixSizes, conv_bufferMemory);
-
-
+  vulkanTestConv(buffsizes, input_data, input_size,
+          filter_data, filter_size,
+          bias_data, bias_size,
+          output_data, output_size,
+          stride_width, stride_height, 
+          pad_width, pad_height, 
+          sizes, strides,
+          output_activation_min, output_activation_max,
+          physicalDevice, device, pipelineConv, pipelineLayoutConv, 
+          descriptorSetLayoutConv, queueV, queueFamilyIndex,
+          conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixB, conv_matrixC, conv_matrixSizes, conv_bufferMemory);
 
   // // // Stop timers
   // // double wall1 = get_wall_time();
