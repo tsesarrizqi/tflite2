@@ -455,7 +455,7 @@ void OpenCLPortableMatrixBatchVectorMultiplyAccumulate(const float* matrix,
 
   clFinish(queue);
 
-  __android_log_print(ANDROID_LOG_INFO, "Matmulruntime", "Matmulerror1: %d", err);
+  __android_log_print(ANDROID_LOG_INFO, "Matmulruntime", "runkernelMatmulerror1: %d", err);
 
   wall1 = get_wall_time();
   cpu1  = get_cpu_time();
@@ -1604,11 +1604,11 @@ void NeonMatrixBatchVectorMultiplyAccumulateOpenCL(const float* matrix, int m_ro
 // double wall0 = get_wall_time();
 // double cpu0  = get_cpu_time();
 
-// OpenCLPortableMatrixBatchVectorMultiplyAccumulate(matrix,m_rows,m_cols,vector,n_batch,result,1, context_cl, queue, program);
+OpenCLPortableMatrixBatchVectorMultiplyAccumulate(matrix,m_rows,m_cols,vector,n_batch,result,1, context_cl, queue, program);
 
-vulkanTest(matrix, vector, result, m_rows, m_cols, n_batch,
-  physicalDevice, device, pipelineMatmul, pipelineLayoutMatmul, 
-  descriptorSetLayoutMatmul, queueV, queueFamilyIndex);
+// vulkanTest(matrix, vector, result, m_rows, m_cols, n_batch,
+//   physicalDevice, device, pipelineMatmul, pipelineLayoutMatmul, 
+//   descriptorSetLayoutMatmul, queueV, queueFamilyIndex);
 
 // double wall1 = get_wall_time();
 // double cpu1  = get_cpu_time();

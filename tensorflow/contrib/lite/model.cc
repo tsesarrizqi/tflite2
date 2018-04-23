@@ -106,7 +106,7 @@ const char *kernelSource =           "\n" \
 "    }  \n" \
 "}   \n" \
 "  \n" \
-"__kernel void conv(__global float4* input_data,    \n" \
+"__kernel void convfloat(__global float4* input_data,    \n" \
 "          __constant float4* filter_data,    \n" \
 "          __global float* bias_data,    \n" \
 "          __global float* output_data,   \n" \
@@ -148,6 +148,154 @@ const char *kernelSource =           "\n" \
 "            output_data[out_channel*dim_strides.sc + out_x*dim_strides.sd + out_y*dim_strides.se + batch*dim_strides.sf] = min(max(total + bias_value, output_activation_min), output_activation_max); \n" \
 "    }  \n" \
 "}   \n" \
+"__kernel void convlocalfilter(__global float4* input_data,    \n" \
+"          __constant float4* filter_data,    \n" \
+"          __global float* bias_data,    \n" \
+"          __global float* output_data,   \n" \
+"          int stride_width, int stride_height,    \n" \
+"          int pad_width, int pad_height,    \n" \
+"          __global int16* dim_sizes0, __global int16* dim_strides0,   \n" \
+"          float output_activation_min, float output_activation_max) {   \n" \
+"     \n" \
+"    int local_y = get_local_id(0);   \n" \
+"    int local_x = get_local_id(1);   \n" \
+"    int ychannel = get_global_id(0);   \n" \
+"    int xchannel = get_global_id(1);   \n" \
+"    int16 dim_sizes = dim_sizes0[0];   \n" \
+"    int16 dim_strides = dim_strides0[0];   \n" \
+"    int xsize = ((dim_sizes.sd-1)/16+1)*16;   \n" \
+"    int ysize = ((dim_sizes.se-1)/8+1)*8;   \n" \
+"    int out_x = xchannel\%xsize;   \n" \
+"    int out_y = ychannel\%ysize;   \n" \
+"    int out_channel = xchannel/xsize;   \n" \
+"    int batch = ychannel/ysize;   \n" \
+"    __local float4 localfilter[8][8]; \n" \
+"      float total = 0.0;   \n" \
+"      for (int in_channel = 0; in_channel < dim_sizes.s0/4; ++in_channel) {   \n" \
+"        barrier(CLK_LOCAL_MEM_FENCE);   \n" \
+"        //load filter  \n" \
+"        if((local_y < dim_sizes.s6) && (local_x < dim_sizes.s5)) {   \n" \
+"          localfilter[local_y][local_x] = filter_data[in_channel*dim_strides.s4 + local_x*dim_strides.s5/4 + local_y*dim_strides.s6/4 + out_channel*dim_strides.s7/4];   \n" \
+"        }   \n" \
+"        barrier(CLK_LOCAL_MEM_FENCE);   \n" \
+"        if((out_x < dim_sizes.sd) && (out_y < dim_sizes.se)) {   \n" \
+"          for (int filter_y = 0; filter_y < dim_sizes.s6; ++filter_y) {   \n" \
+"            for (int filter_x = 0; filter_x < dim_sizes.s5; ++filter_x) {   \n" \
+"              int in_x = (out_x * stride_width) - pad_width + filter_x;   \n" \
+"              int in_y = (out_y * stride_height) - pad_height + filter_y;   \n" \
+"              if ((in_x >= 0) && (in_x < dim_sizes.s1) && (in_y >= 0) &&   \n" \
+"                  (in_y < dim_sizes.s2)) {   \n" \
+"                float4 input_value = input_data[in_channel*dim_strides.s0 + in_x*dim_strides.s1/4 + in_y*dim_strides.s2/4 + batch*dim_strides.s3/4];   \n" \
+"                float4 filter_value = localfilter[filter_y][filter_x];  \n" \
+"                // float4 filter_value = filter_data[in_channel*dim_strides.s4 + filter_x*dim_strides.s5/4 + filter_y*dim_strides.s6/4 + out_channel*dim_strides.s7/4];  \n" \
+"                total += dot(input_value,filter_value);   \n" \
+"              }   \n" \
+"            }   \n" \
+"          }   \n" \
+"        }   \n" \
+"      }  \n" \
+"      if((out_x < dim_sizes.sd) && (out_y < dim_sizes.se)) {   \n" \
+"        float bias_value = 0.0;   \n" \
+"        if (bias_data) {   \n" \
+"          bias_value = bias_data[out_channel*dim_strides.s8];   \n" \
+"        } \n" \
+"        output_data[out_channel*dim_strides.sc + out_x*dim_strides.sd + out_y*dim_strides.se + batch*dim_strides.sf] = min(max(total + bias_value, output_activation_min), output_activation_max); \n" \
+"      }   \n" \
+"} \n" \
+"__kernel void convlocalall(__global float4* input_data,    \n" \
+"          __constant float4* filter_data,    \n" \
+"          __global float* bias_data,    \n" \
+"          __global float* output_data,   \n" \
+"          int stride_width, int stride_height,    \n" \
+"          int pad_width, int pad_height,    \n" \
+"          __global int16* dim_sizes0, __global int16* dim_strides0,   \n" \
+"          float output_activation_min, float output_activation_max) {   \n" \
+"     \n" \
+"    int local_y = get_local_id(0);   \n" \
+"    int local_x = get_local_id(1);   \n" \
+"    int ychannel = get_global_id(0);   \n" \
+"    int xchannel = get_global_id(1);   \n" \
+"    int16 dim_sizes = dim_sizes0[0];   \n" \
+"    int16 dim_strides = dim_strides0[0];   \n" \
+"    int xsize = ((dim_sizes.sd-1)/16+1)*16;   \n" \
+"    int ysize = ((dim_sizes.se-1)/8+1)*8;   \n" \
+"    int out_x = xchannel\%xsize;   \n" \
+"    int out_y = ychannel\%ysize;   \n" \
+"    int out_channel = xchannel/xsize;   \n" \
+"    int batch = ychannel/ysize;   \n" \
+"    __local float4 localfilter[8][8]; \n" \
+"    __local float4 localinput[16][24]; \n" \
+"      float total = 0.0;   \n" \
+"      for (int in_channel = 0; in_channel < dim_sizes.s0/4; ++in_channel) {   \n" \
+"        barrier(CLK_LOCAL_MEM_FENCE);   \n" \
+"        //load input     \n" \
+"        if((out_x < dim_sizes.s1) && (out_y < dim_sizes.s2))\n" \
+"          localinput[local_y][local_x] = input_data[in_channel*dim_strides.s0 + out_x*dim_strides.s1/4 + out_y*dim_strides.s2/4 + batch*dim_strides.s3/4];\n" \
+"        if((out_x < dim_sizes.s1) && ((out_y+8) < dim_sizes.s2) && (local_y < dim_sizes.s6))\n" \
+"          localinput[local_y+8][local_x] = input_data[in_channel*dim_strides.s0 + out_x*dim_strides.s1/4 + (out_y+8)*dim_strides.s2/4 + batch*dim_strides.s3/4];\n" \
+"        if(((out_x+16) < dim_sizes.s1) && (out_y < dim_sizes.s2) && (local_x < dim_sizes.s5))\n" \
+"          localinput[local_y][local_x+16] = input_data[in_channel*dim_strides.s0 + (out_x+16)*dim_strides.s1/4 + out_y*dim_strides.s2/4 + batch*dim_strides.s3/4];\n" \
+"        if(((out_x+16) < dim_sizes.s1) && ((out_y+8) < dim_sizes.s2) && (local_x < dim_sizes.s5) && (local_y < dim_sizes.s6))\n" \
+"          localinput[local_y+8][local_x+16] = input_data[in_channel*dim_strides.s0 + (out_x+16)*dim_strides.s1/4 + (out_y+8)*dim_strides.s2/4 + batch*dim_strides.s3/4];\n" \
+"        //load filter  \n" \
+"        if((local_y < dim_sizes.s6) && (local_x < dim_sizes.s5)) {   \n" \
+"          localfilter[local_y][local_x] = filter_data[in_channel*dim_strides.s4 + local_x*dim_strides.s5/4 + local_y*dim_strides.s6/4 + out_channel*dim_strides.s7/4];   \n" \
+"        }   \n" \
+"        barrier(CLK_LOCAL_MEM_FENCE);   \n" \
+"        if((out_x < dim_sizes.sd) && (out_y < dim_sizes.se)) {   \n" \
+"          for (int filter_y = 0; filter_y < dim_sizes.s6; ++filter_y) {   \n" \
+"            for (int filter_x = 0; filter_x < dim_sizes.s5; ++filter_x) {   \n" \
+"              int in_x = (local_x * stride_width) - pad_width + filter_x;   \n" \
+"              int in_y = (local_y * stride_height) - pad_height + filter_y;\n" \
+"              // int in_x = (out_x * stride_width) - pad_width + filter_x;   \n" \
+"              // int in_y = (out_y * stride_height) - pad_height + filter_y;   \n" \
+"              if ((in_x >= 0) && (in_x < dim_sizes.s1) && (in_y >= 0) &&   \n" \
+"                  (in_y < dim_sizes.s2)) {   \n" \
+"                float4 input_value = localinput[in_y][in_x];\n" \
+"                // float4 input_value = input_data[in_channel*dim_strides.s0 + in_x*dim_strides.s1/4 + in_y*dim_strides.s2/4 + batch*dim_strides.s3/4];   \n" \
+"                float4 filter_value = localfilter[filter_y][filter_x];  \n" \
+"                // float4 filter_value = filter_data[in_channel*dim_strides.s4 + filter_x*dim_strides.s5/4 + filter_y*dim_strides.s6/4 + out_channel*dim_strides.s7/4];  \n" \
+"                total += dot(input_value,filter_value);   \n" \
+"              }   \n" \
+"            }   \n" \
+"          }   \n" \
+"        }   \n" \
+"      }  \n" \
+"      if((out_x < dim_sizes.sd) && (out_y < dim_sizes.se)) {   \n" \
+"        float bias_value = 0.0;   \n" \
+"        if (bias_data) {   \n" \
+"          bias_value = bias_data[out_channel*dim_strides.s8];   \n" \
+"        } \n" \
+"        output_data[out_channel*dim_strides.sc + out_x*dim_strides.sd + out_y*dim_strides.se + batch*dim_strides.sf] = min(max(total + bias_value, output_activation_min), output_activation_max); \n" \
+"      }   \n" \
+"} \n" \
+"__kernel void convmatmul(__global float4* input_data,    \n" \
+"          __constant float4* filter_data,    \n" \
+"          __global float* bias_data,    \n" \
+"          __global float* output_data,   \n" \
+"          int stride_width, int stride_height,    \n" \
+"          int pad_width, int pad_height,    \n" \
+"          __global int16* dim_sizes0, __global int16* dim_strides0,   \n" \
+"          float output_activation_min, float output_activation_max) {   \n" \
+"    int row = get_global_id(0); \n" \
+"    int col = get_global_id(1); \n" \
+"    int16 dim_sizes = dim_sizes0[0];   \n" \
+"    int16 dim_strides = dim_strides0[0];   \n" \
+"    int m_cols = dim_sizes.s0; \n" \
+"    int m_rows = dim_sizes.s1*dim_sizes.s2*dim_sizes.s3; \n" \
+"    int n_batch = dim_sizes.s5*dim_sizes.s6*dim_sizes.s7; \n" \
+"    if ((row < m_rows) && (col < n_batch)) { \n" \
+"        float sum = 0.0; \n" \
+"        for(int i = 0; i < m_cols/4; i++){ \n" \
+"            sum += dot(input_data[row*m_cols/4 + i],filter_data[col*m_cols/4 + i]);\n" \
+"        } \n" \
+"        float bias_value = 0.0;   \n" \
+"        if (bias_data) {   \n" \
+"          bias_value = bias_data[col*dim_strides.s8];   \n" \
+"        } \n" \
+"        output_data[row*n_batch + col] = min(max(sum + bias_value, output_activation_min), output_activation_max);\n" \
+"    } \n" \
+"} \n" \
 "__kernel void transpose(__global float4* input, __global float* output,\n" \
 "    int rows, int cols) {         \n" \
 "   int row = get_global_id(0);                                      \n" \
@@ -158,7 +306,7 @@ const char *kernelSource =           "\n" \
 "   output[(col4*4+2)*rows + row] = in_value.z;\n" \
 "   output[(col4*4+3)*rows + row] = in_value.w;\n" \
 "}      \n" \
-"__kernel void matrixVectorMulF4(__global half4* result,    \n" \
+"__kernel void matrixVectorMulF4half(__global half4* result,    \n" \
 "    const __global half4* matrix,    \n" \
 "    const __global half4* vector,     \n" \
 "    int m_cols,    \n" \
@@ -1247,7 +1395,53 @@ void createMatmulPipeline() {
     //   "    } \n" \
     //   "}";
 
-    std::string source =
+    // std::string source =
+    //   "#version 450 \n" \
+    //   "#extension GL_ARB_separate_shader_objects : enable \n" \
+    //   "layout(local_size_x = 8, local_size_y = 32, local_size_z = 1) in; \n" \
+    //   "layout(binding = 0) readonly buffer matrixA { \n" \
+    //   "    vec4 matrix[]; \n" \
+    //   "}; \n" \
+    //   "layout(binding = 1) uniform matrixB { \n" \
+    //   "    vec4 vector[512]; \n" \
+    //   "}; \n" \
+    //   "layout(binding = 2) buffer matrixC { \n" \
+    //   "    vec4 result[]; \n" \
+    //   "}; \n" \
+    //   "layout(binding = 3) uniform UniformBufferObject { \n" \
+    //   "    int m_rows; \n" \
+    //   "    int m_cols; \n" \
+    //   "    int n_batch; \n" \
+    //   "    int pad; \n" \
+    //   "}; \n" \
+    //   "shared vec4 Aacc[8][32]; \n" \
+    //   "void main() { \n" \
+    //   "    int row = int(gl_GlobalInvocationID.x)*4; \n" \
+    //   "    int localidx0 = int(gl_LocalInvocationID.x); \n" \
+    //   "    int localidx = int(gl_LocalInvocationID.y); \n" \
+    //   "    if (row < m_rows) { \n" \
+    //   "        vec4 sum = {0.0, 0.0, 0.0, 0.0}; \n" \
+    //   "        int starti = localidx*(m_cols/128); \n" \
+    //   "        for(int i = starti; i < (starti+(m_cols/128)); i++){ \n" \
+    //   "            vec4 currb = vector[i];\n" \
+    //   "            sum.x += dot(matrix[(row*m_cols/4) + i],currb);\n" \
+    //   "            sum.y += dot(matrix[((row+1)*m_cols/4) + i],currb); \n" \
+    //   "            sum.z += dot(matrix[((row+2)*m_cols/4) + i],currb);\n" \
+    //   "            sum.w += dot(matrix[((row+3)*m_cols/4) + i],currb);\n" \
+    //   "        } \n" \
+    //   "        Aacc[localidx0][localidx] = sum; \n" \
+    //   "        barrier();    \n" \
+    //   "        if(localidx == 0) { \n" \
+    //   "          vec4 total = {0.0, 0.0, 0.0, 0.0};    \n" \
+    //   "          for(int i = 0; i < 32; i++) {    \n" \
+    //   "            total += Aacc[localidx0][i]; \n" \
+    //   "          } \n" \
+    //   "          result[row/4] = total;\n" \
+    //   "        } \n" \
+    //   "    } \n" \
+    //   "}";
+
+      std::string source =
       "#version 450 \n" \
       "#extension GL_ARB_separate_shader_objects : enable \n" \
       "layout(local_size_x = 8, local_size_y = 32, local_size_z = 1) in; \n" \
@@ -1275,11 +1469,9 @@ void createMatmulPipeline() {
       "        vec4 sum = {0.0, 0.0, 0.0, 0.0}; \n" \
       "        int starti = localidx*(m_cols/128); \n" \
       "        for(int i = starti; i < (starti+(m_cols/128)); i++){ \n" \
+      "            mat4 curra = mat4(matrix[(row*m_cols/4) + i],matrix[((row+1)*m_cols/4) + i],matrix[((row+2)*m_cols/4) + i],matrix[((row+3)*m_cols/4) + i]);\n" \
       "            vec4 currb = vector[i];\n" \
-      "            sum.x += dot(matrix[(row*m_cols/4) + i],currb);\n" \
-      "            sum.y += dot(matrix[((row+1)*m_cols/4) + i],currb); \n" \
-      "            sum.z += dot(matrix[((row+2)*m_cols/4) + i],currb);\n" \
-      "            sum.w += dot(matrix[((row+3)*m_cols/4) + i],currb);\n" \
+      "            sum += (currb*curra);\n" \
       "        } \n" \
       "        Aacc[localidx0][localidx] = sum; \n" \
       "        barrier();    \n" \
@@ -1437,8 +1629,8 @@ TfLiteStatus InterpreterBuilder::ParseNodes(
   TfLiteStatus status = kTfLiteOk;
   //note: andoird log
   // __android_log_print(ANDROID_LOG_INFO, "Ngising", "addnodewithparam");
-  // initOpenCL();
-  initVulkan();
+  initOpenCL();
+  // initVulkan();
   for (int i = 0; i < operators->Length(); ++i) {
     const auto* op = operators->Get(i);
     int index = op->opcode_index();
