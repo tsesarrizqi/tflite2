@@ -1473,10 +1473,14 @@ inline void OpenCLConv(const float* input_data, int input_size,
     err  = clSetKernelArg(kernelmatmul, 10, sizeof(float), &output_activation_min);
     err  = clSetKernelArg(kernelmatmul, 11, sizeof(float), &output_activation_max);
 
+    //conv matmul local
+    // const size_t local[2] = { 8, 32 };
+    // const size_t global[2] = { 8, (size_t) ((output_height*output_width*batches*output_depth-1)/32+1)*32 };  
+    
     //conv matmul
     const size_t local[2] = { 8, 32 };
-    const size_t global[2] = { (size_t) ((output_height*output_width*batches-1)/8+1)*8, (size_t) ((output_depth-1)/32+1)*32 };  
-    
+    const size_t global[2] = { (size_t) ((output_depth-1)/8+1)*8, (size_t) ((output_height*output_width*batches-1)/32+1)*32 };
+
     double wall0 = get_wall_time();
     double cpu0  = get_cpu_time();
 
@@ -1490,6 +1494,8 @@ inline void OpenCLConv(const float* input_data, int input_size,
 
     double wall = wall1 - wall0;
     double cpu = cpu1 - cpu0;
+
+    // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelConverror: %d", err);
 
     // note: andoird log
     __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelOclConv: %lf", wall);

@@ -277,8 +277,8 @@ const char *kernelSource =           "\n" \
 "          int pad_width, int pad_height,    \n" \
 "          __global int16* dim_sizes0, __global int16* dim_strides0,   \n" \
 "          float output_activation_min, float output_activation_max) {   \n" \
-"    int row = get_global_id(0); \n" \
-"    int col = get_global_id(1); \n" \
+"    int row = get_global_id(1); \n" \
+"    int col = get_global_id(0); \n" \
 "    int16 dim_sizes = dim_sizes0[0];   \n" \
 "    int16 dim_strides = dim_strides0[0];   \n" \
 "    int m_cols = dim_sizes.s0; \n" \
@@ -294,6 +294,47 @@ const char *kernelSource =           "\n" \
 "          bias_value = bias_data[col*dim_strides.s8];   \n" \
 "        } \n" \
 "        output_data[row*n_batch + col] = min(max(sum + bias_value, output_activation_min), output_activation_max);\n" \
+"    } \n" \
+"} \n" \
+"__kernel void convmatmullocal(__global float4* input_data,    \n" \
+"          __constant float4* filter_data,    \n" \
+"          __global float* bias_data,    \n" \
+"          __global float* output_data,   \n" \
+"          int stride_width, int stride_height,    \n" \
+"          int pad_width, int pad_height,    \n" \
+"          __global int16* dim_sizes0, __global int16* dim_strides0,   \n" \
+"          float output_activation_min, float output_activation_max) {   \n" \
+"    int rowcol = get_global_id(1); \n" \
+"    int localidx0 = get_local_id(1); \n" \
+"    int localidx = get_local_id(0); \n" \
+"    int16 dim_sizes = dim_sizes0[0];   \n" \
+"    int16 dim_strides = dim_strides0[0];   \n" \
+"    int m_cols = dim_sizes.s0; \n" \
+"    int m_rows = dim_sizes.s1*dim_sizes.s2*dim_sizes.s3; \n" \
+"    int n_batch = dim_sizes.s5*dim_sizes.s6*dim_sizes.s7; \n" \
+"    int row = rowcol/dim_sizes.s7; \n" \
+"    int col = rowcol\%dim_sizes.s7; \n" \
+"    __local float Aacc[32][8]; \n" \
+"    if ((row < m_rows) && (col < n_batch)) { \n" \
+"        float sum = 0.0; \n" \
+"        int interval = (m_cols/4-1)/8+1; \n" \
+"        int starti = localidx*interval; \n" \
+"        for(int i = starti; i < min(m_cols/4,(starti+interval)); i++){ \n" \
+"            sum += dot(input_data[row*m_cols/4 + i],filter_data[col*m_cols/4 + i]);\n" \
+"        } \n" \
+"        Aacc[localidx0][localidx] = sum; \n" \
+"        barrier(CLK_LOCAL_MEM_FENCE);    \n" \
+"        if(localidx == 0) { \n" \
+"          float total = Aacc[localidx0][0] + Aacc[localidx0][1] + Aacc[localidx0][2] + Aacc[localidx0][3] + Aacc[localidx0][4] + Aacc[localidx0][5] + Aacc[localidx0][6] + Aacc[localidx0][7];    \n" \
+"          //for(int i = 0; i < 32; i++) {    \n" \
+"            //total += Aacc[localidx0][i]; \n" \
+"          //} \n" \
+"          float bias_value = 0.0;   \n" \
+"          if (bias_data) {   \n" \
+"            bias_value = bias_data[col*dim_strides.s8];   \n" \
+"          } \n" \
+"          output_data[row*n_batch + col] = min(max(total + bias_value, output_activation_min), output_activation_max);\n" \
+"        } \n" \
 "    } \n" \
 "} \n" \
 "__kernel void transpose(__global float4* input, __global float* output,\n" \
