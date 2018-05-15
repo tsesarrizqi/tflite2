@@ -185,7 +185,7 @@ void* Init(TfLiteContext* context, const char* buffer, size_t length) {
 
 void* InitOpenCL(TfLiteContext* context, const char* buffer, size_t length,
   cl_context context_cl, cl_command_queue queue, cl_program program, cl_mem cl_mem_arr[6],
-  VkPhysicalDevice physicalDevice, VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, 
+  VkPhysicalDevice physicalDevice, VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, VkPipeline pipelineConvMatmul, VkPipelineLayout pipelineLayoutConvMatmul,
     VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex,
     VkCommandPool conv_commandPool, VkCommandBuffer conv_commandBuffer, VkBuffer conv_matrixA, VkBuffer conv_matrixB, VkBuffer conv_matrixC, VkBuffer conv_matrixSizes, VkDeviceMemory conv_bufferMemory) {
   // This is a builtin op, so we don't use the contents in 'buffer', if any.
@@ -335,16 +335,16 @@ TfLiteStatus EvalPie(TfLiteContext* context, TfLiteNode* node,
   //note: andoird log
   // __android_log_print(ANDROID_LOG_INFO, "Ngisin", "fcmatmul");
   // Compute output += weight * input
-  tensor_utils::MatrixBatchVectorMultiplyAccumulate(
-      filter->data.f, num_units, input_size, input->data.f, batch_size,
-      output->data.f, /*result_stride=*/1);
-
-  // tensor_utils::MatrixBatchVectorMultiplyAccumulateOpenCL(
+  // tensor_utils::MatrixBatchVectorMultiplyAccumulate(
   //     filter->data.f, num_units, input_size, input->data.f, batch_size,
-  //     output->data.f, /*result_stride=*/1, context_cl_global, queue_global, program_global, cl_mem_arr_global,
-  //     physicalDevice_global, device_global, pipelineConv_global, pipelineMatmul_global, pipelineLayoutConv_global, 
-  //       pipelineLayoutMatmul_global, descriptorSetLayoutConv_global, descriptorSetLayoutMatmul_global, queueV_global, queueFamilyIndex_global,
-  //       conv_commandPool_global, conv_commandBuffer_global, conv_matrixA_global, conv_matrixB_global, conv_matrixC_global, conv_matrixSizes_global, conv_bufferMemory_global);
+  //     output->data.f, /*result_stride=*/1);
+
+  tensor_utils::MatrixBatchVectorMultiplyAccumulateOpenCL(
+      filter->data.f, num_units, input_size, input->data.f, batch_size,
+      output->data.f, /*result_stride=*/1, context_cl_global, queue_global, program_global, cl_mem_arr_global,
+      physicalDevice_global, device_global, pipelineConv_global, pipelineMatmul_global, pipelineLayoutConv_global, 
+        pipelineLayoutMatmul_global, descriptorSetLayoutConv_global, descriptorSetLayoutMatmul_global, queueV_global, queueFamilyIndex_global,
+        conv_commandPool_global, conv_commandBuffer_global, conv_matrixA_global, conv_matrixB_global, conv_matrixC_global, conv_matrixSizes_global, conv_bufferMemory_global);
 
   // Apply activation function
   tensor_utils::ApplyActivationToVector(output->data.f, batch_size * num_units,

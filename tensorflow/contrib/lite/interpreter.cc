@@ -230,7 +230,7 @@ TfLiteStatus Interpreter::AddNodeWithParametersOpenCL(
     const char* init_data, size_t init_data_size, void* builtin_data,
     const TfLiteRegistration* registration,
     cl_context context_cl, cl_command_queue queue, cl_program program, cl_mem cl_mem_arr[6],
-    VkPhysicalDevice physicalDevice, VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, 
+    VkPhysicalDevice physicalDevice, VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, VkPipeline pipelineConvMatmul, VkPipelineLayout pipelineLayoutConvMatmul,
     VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex,
     VkCommandPool conv_commandPool, VkCommandBuffer conv_commandBuffer, VkBuffer conv_matrixA, VkBuffer conv_matrixB, VkBuffer conv_matrixC, VkBuffer conv_matrixSizes, VkDeviceMemory conv_bufferMemory,
     int* node_index) {
@@ -262,7 +262,7 @@ TfLiteStatus Interpreter::AddNodeWithParametersOpenCL(
   __android_log_print(ANDROID_LOG_INFO, "Ngising", "masuk interpreter");
   if (init_data) {
     node.user_data = OpInitOpenCL(*registration, init_data, init_data_size, context_cl, queue, program, cl_mem_arr,
-      physicalDevice, device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, descriptorSetLayoutConv, 
+      physicalDevice, device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, pipelineConvMatmul, pipelineLayoutConvMatmul, descriptorSetLayoutConv, 
       descriptorSetLayoutMatmul, queueV, queueFamilyIndex,
       conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixB, conv_matrixC, conv_matrixSizes, conv_bufferMemory);
   } else {
@@ -270,7 +270,7 @@ TfLiteStatus Interpreter::AddNodeWithParametersOpenCL(
         OpInitOpenCL(*registration,
                reinterpret_cast<const char*>(builtin_data_deleter.get()), 0,
                context_cl, queue, program, cl_mem_arr,
-               physicalDevice, device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, 
+               physicalDevice, device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, pipelineConvMatmul, pipelineLayoutConvMatmul, 
                descriptorSetLayoutConv, descriptorSetLayoutMatmul, queueV, queueFamilyIndex,
                conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixB, conv_matrixC, conv_matrixSizes, conv_bufferMemory);
   }

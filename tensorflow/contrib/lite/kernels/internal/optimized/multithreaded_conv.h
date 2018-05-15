@@ -305,6 +305,7 @@ inline double get_cpu_time(){
 static cl_kernel kernellocalall = NULL;
 static cl_kernel kernellocalfilter = NULL;
 static cl_kernel kernelmatmul = NULL;
+static cl_kernel kernelconv = NULL;
 // static cl_mem d_input = NULL;
 // static cl_mem d_filter = NULL;
 // static cl_mem d_bias = NULL;
@@ -418,26 +419,7 @@ public:
         double cpu1  = get_cpu_time();
         double wall = wall1 - wall0;
         double cpu = cpu1 - cpu0;
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createInstance: %lf", wall);
-        
-        // wall0 = get_wall_time();
-        // cpu0  = get_cpu_time();
-        // findPhysicalDevice();
-        // wall1 = get_wall_time();
-        // cpu1  = get_cpu_time();
-        // wall = wall1 - wall0;
-        // cpu = cpu1 - cpu0;
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "findPhysicalDevice: %lf", wall);
-        
-        // wall0 = get_wall_time();
-        // cpu0  = get_cpu_time();
-        // createDevice();
-        // wall1 = get_wall_time();
-        // cpu1  = get_cpu_time();
-        // wall = wall1 - wall0;
-        // cpu = cpu1 - cpu0;
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createDevice: %lf", wall);
-        
+
         wall0 = get_wall_time();
         cpu0  = get_cpu_time();
         createBuffer();
@@ -446,16 +428,7 @@ public:
         wall = wall1 - wall0;
         cpu = cpu1 - cpu0;
         __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createBuffer: %lf", wall);
-        
-        // wall0 = get_wall_time();
-        // cpu0  = get_cpu_time();
-        // createDescriptorSetLayout();
-        // wall1 = get_wall_time();
-        // cpu1  = get_cpu_time();
-        // wall = wall1 - wall0;
-        // cpu = cpu1 - cpu0;
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createDescriptorSetLayout: %lf", wall);
-        
+
         wall0 = get_wall_time();
         cpu0  = get_cpu_time();
         createDescriptorSet();
@@ -464,16 +437,7 @@ public:
         wall = wall1 - wall0;
         cpu = cpu1 - cpu0;
         __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createDescriptorSet: %lf", wall);
-        
-        // wall0 = get_wall_time();
-        // cpu0  = get_cpu_time();
-        // createComputePipeline();
-        // wall1 = get_wall_time();
-        // cpu1  = get_cpu_time();
-        // wall = wall1 - wall0;
-        // cpu = cpu1 - cpu0;
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createComputePipeline: %lf", wall);
-        
+
         wall0 = get_wall_time();
         cpu0  = get_cpu_time();
         createCommandBuffer();
@@ -511,136 +475,7 @@ public:
         __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "cleanup: %lf", wall);
     }
 
-    // void createInstance() {
-    //     VkApplicationInfo applicationInfo = {};
-    //     applicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    //     applicationInfo.pApplicationName = "Matrix Convolution";
-    //     applicationInfo.applicationVersion = 0;
-    //     applicationInfo.pEngineName = "Naive";
-    //     applicationInfo.engineVersion = 0;
-    //     applicationInfo.apiVersion = VK_MAKE_VERSION(1, 0, 31);
-        
-    //     VkInstanceCreateInfo createInfo = {};
-    //     createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-    //     createInfo.flags = 0;
-    //     createInfo.pApplicationInfo = &applicationInfo;
-
-    //     VK_CHECK_RESULT(vkCreateInstance(
-    //         &createInfo,
-    //         NULL,
-    //         &instance));
-    // }
-
-    // void findPhysicalDevice() {
-    //     uint32_t deviceCount;
-    //     vkEnumeratePhysicalDevices(instance, &deviceCount, NULL);
-    //     if (deviceCount == 0) {
-    //         throw std::runtime_error("could not find a device with vulkan support");
-    //     }
-
-    //     std::vector<VkPhysicalDevice> devices(deviceCount);
-    //     vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
-
-    //     for (VkPhysicalDevice device : devices) {
-    //         if (true) { // As above stated, we do no feature checks, so just accept.
-    //             physicalDevice = device;
-    //             break;
-    //         }
-    //     }
-    // }
-
-    // uint32_t getComputeQueueFamilyIndex() {
-    //     uint32_t queueFamilyCount;
-
-    //     vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, NULL);
-
-    //     std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-    //     vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilies.data());
-
-    //     uint32_t i = 0;
-    //     for (; i < queueFamilies.size(); ++i) {
-    //         VkQueueFamilyProperties props = queueFamilies[i];
-
-    //         if (props.queueCount > 0 && (props.queueFlags & VK_QUEUE_COMPUTE_BIT)) {
-    //             break;
-    //         }
-    //     }
-
-    //     if (i == queueFamilies.size()) {
-    //         throw std::runtime_error("could not find a queue family that supports operations");
-    //     }
-
-    //     return i;
-    // }
-
-    // void createDevice() {
-    //     VkDeviceQueueCreateInfo queueCreateInfo = {};
-    //     queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    //     queueFamilyIndex = getComputeQueueFamilyIndex(); // find queue family with compute capability.
-    //     queueCreateInfo.queueFamilyIndex = queueFamilyIndex;
-    //     queueCreateInfo.queueCount = 1; // create one queue in this family. We don't need more.
-    //     float queuePriorities = 1.0;  // we only have one queue, so this is not that imporant. 
-    //     queueCreateInfo.pQueuePriorities = &queuePriorities;
-
-    //     VkDeviceCreateInfo deviceCreateInfo = {};
-
-    //     VkPhysicalDeviceFeatures deviceFeatures = {};
-
-    //     deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    //     deviceCreateInfo.pQueueCreateInfos = &queueCreateInfo; // when creating the logical device, we also specify what queues it has.
-    //     deviceCreateInfo.queueCreateInfoCount = 1;
-    //     deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
-
-    //     VK_CHECK_RESULT(vkCreateDevice(physicalDevice, &deviceCreateInfo, NULL, &device)); // create logical device.
-
-    //     vkGetDeviceQueue(device, queueFamilyIndex, 0, &queue);
-    // }
-
-    // uint32_t findMemoryType(VkDeviceSize memorySize, VkMemoryPropertyFlags properties) {
-    //     VkPhysicalDeviceMemoryProperties memoryProperties;
-
-    //     vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
-
-    //     for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; ++i) {
-    //         if ((memorySize < memoryProperties.memoryHeaps[memoryProperties.memoryTypes[i].heapIndex].size) &&
-    //             ((memoryProperties.memoryTypes[i].propertyFlags & properties) == properties))
-    //             return i;
-    //     }
-    //     return -1;
-    // }
-
     void createBuffer() {
-        // VkBufferCreateInfo matrixACreateInfo = {};
-        // matrixACreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        // matrixACreateInfo.size = matrixASize+matrixBSize+matrixCSize; // buffer size in bytes. 
-        // matrixACreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
-        // matrixACreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
-
-        // VK_CHECK_RESULT(vkCreateBuffer(device, &matrixACreateInfo, NULL, &matrixA)); // create buffer.
-
-        // VkBufferCreateInfo matrixSizesCreateInfo = {};
-        // matrixSizesCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        // matrixSizesCreateInfo.size = matrixSizesSize; // buffer size in bytes. 
-        // matrixSizesCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
-        // matrixSizesCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
-
-        // VK_CHECK_RESULT(vkCreateBuffer(device, &matrixSizesCreateInfo, NULL, &matrixSizes)); // create buffer.
-        
-        // VkMemoryRequirements memoryRequirementsmatrixA, memoryRequirementsmatrixSizes;
-        // vkGetBufferMemoryRequirements(device, matrixA, &memoryRequirementsmatrixA);
-        // vkGetBufferMemoryRequirements(device, matrixSizes, &memoryRequirementsmatrixSizes);
-
-        // const VkDeviceSize memorySize = memoryRequirementsmatrixA.size+memoryRequirementsmatrixSizes.size;
-
-        // VkMemoryAllocateInfo allocateInfo = {};
-        // allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        // allocateInfo.allocationSize = memorySize; // specify required memory.
-
-        // allocateInfo.memoryTypeIndex = findMemoryType(
-        //     memorySize, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-
-        // VK_CHECK_RESULT(vkAllocateMemory(device, &allocateInfo, NULL, &bufferMemory));
-
         int numchannel = dimSizes[0];
         int addslot = (4-(numchannel%4))%4;
         numchannel = numchannel + addslot;
@@ -689,6 +524,10 @@ public:
         act[1] = outputActivationMax;
         act[2] = 0;
         act[3] = 0;
+
+        if((dimSizes[5] == 1) && (dimSizes[6] == 1) && (strideWidth == 1) && (strideHeight == 1) && (padWidth == 0) && (padHeight == 0)) {
+          act[2] = 1;
+        }
         
         vkUnmapMemory(device, bufferMemory);
 
@@ -700,6 +539,13 @@ public:
         dimStrides[7] = (dimStrides[7]/dimSizes[0])*numchannel;
         dimSizes[0] = numchannel;
         dimSizes[4] = numchannel;
+
+        int d_output_depth = (((dimSizes[12]-1)/4+1)*4);
+
+        //output
+        dimStrides[13] = (dimStrides[13]/dimSizes[12])*d_output_depth/4;
+        dimStrides[14] = (dimStrides[14]/dimSizes[12])*d_output_depth/4;
+        dimStrides[15] = (dimStrides[15]/dimSizes[12])*d_output_depth/4;
 
         int* stridepaddimstmp;
         VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, inputSizeAll+filterSizeAll+biasSizeAll+outputSizeAll+(4*sizeof(float)), 40*sizeof(int), 0, (void **) &stridepaddimstmp));
@@ -718,36 +564,7 @@ public:
         }
 
         vkUnmapMemory(device, bufferMemory);
-
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "runkernelSizeInput: %d", inputSizeAll/sizeof(float));
-        // __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "runkernelSizeFilter: %d", filterSizeAll/sizeof(float));
-
-        // VK_CHECK_RESULT(vkBindBufferMemory(device, matrixA, bufferMemory, 0));
-        // VK_CHECK_RESULT(vkBindBufferMemory(device, matrixSizes, bufferMemory, matrixASize+matrixBSize+matrixCSize));
     }
-
-    // void createDescriptorSetLayout() {
-    //     VkDescriptorSetLayoutBinding descriptorSetLayoutBindings[4];
-
-    //     descriptorSetLayoutBindings[0] = {};
-    //     descriptorSetLayoutBindings[0].binding = 0; // binding = 0
-    //     descriptorSetLayoutBindings[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    //     descriptorSetLayoutBindings[0].descriptorCount = 1;
-    //     descriptorSetLayoutBindings[0].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-
-    //     descriptorSetLayoutBindings[1] = {};
-    //     descriptorSetLayoutBindings[1].binding = 1; // binding = 1
-    //     descriptorSetLayoutBindings[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    //     descriptorSetLayoutBindings[1].descriptorCount = 1;
-    //     descriptorSetLayoutBindings[1].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-
-    //     VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {};
-    //     descriptorSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    //     descriptorSetLayoutCreateInfo.bindingCount = 2; // only a single binding in this descriptor set layout. 
-    //     descriptorSetLayoutCreateInfo.pBindings = descriptorSetLayoutBindings; 
-
-    //     VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCreateInfo, NULL, &descriptorSetLayout));
-    // }
 
     void createDescriptorSet() {
         VkDescriptorPoolSize descriptorPoolSize[2];
@@ -833,113 +650,6 @@ public:
         vkUpdateDescriptorSets(device, 4, writeDescriptorSets, 0, NULL);
     }
 
-    // void createComputePipeline() {
-    //     // VkPhysicalDeviceProperties devprops;
-    //     // vkGetPhysicalDeviceProperties(physicalDevice, &devprops);
-    //     // __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxComputeSharedMemorySize: %d", devprops.limits.maxComputeSharedMemorySize);
-    //     // __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxComputeWorkGroupCount[3]: %d %d %d", devprops.limits.maxComputeWorkGroupCount[0], devprops.limits.maxComputeWorkGroupCount[1], devprops.limits.maxComputeWorkGroupCount[2]);
-    //     // __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxComputeWorkGroupInvocations: %d", devprops.limits.maxComputeWorkGroupInvocations);
-    //     // __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxComputeWorkGroupSize[3]: %d %d %d", devprops.limits.maxComputeWorkGroupSize[0], devprops.limits.maxComputeWorkGroupSize[1], devprops.limits.maxComputeWorkGroupSize[2]);
-    //     // __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxDescriptorSetStorageBuffers: %d", devprops.limits.maxDescriptorSetStorageBuffers);
-    //     // __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxPerStageDescriptorStorageBuffers: %d", devprops.limits.maxPerStageDescriptorStorageBuffers);
-    //     // __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxPerStageResources: %d", devprops.limits.maxPerStageResources);
-    //     // __android_log_print(ANDROID_LOG_INFO, "VulkanLimit", "maxStorageBufferRange: %d", devprops.limits.maxStorageBufferRange);
-
-    //     // Start Timers
-    //     double wall0 = get_wall_time();
-    //     double cpu0  = get_cpu_time();
-
-    //     std::string source =
-    //     "#version 450 \n" \
-    //     "#extension GL_ARB_separate_shader_objects : enable \n" \
-    //     "layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in; \n" \
-    //     "layout(binding = 0) buffer floatBuffer { \n" \
-    //     "    float convFloatB[]; \n" \
-    //     "}; \n" \
-    //     "layout(binding = 1) readonly buffer intBuffer { \n" \
-    //     "    int convIntB[]; \n" \
-    //     "}; \n" \
-    //     "void main() { \n" \
-    //     "  int out_channel = int(gl_GlobalInvocationID.x); \n" \
-    //     "  int out_y = int(gl_GlobalInvocationID.y); \n" \
-    //     "  int out_x = int(gl_GlobalInvocationID.z); \n" \
-    //     "  if((out_channel < convIntB[11]) && (out_x < convIntB[17]) && (out_y < convIntB[18])) { \n" \
-    //     "      for (int batch = 0; batch < convIntB[7]; ++batch) { \n" \
-    //     "        float total = 0.0; \n" \
-    //     "        for (int filter_y = 0; filter_y < convIntB[10]; ++filter_y) { \n" \
-    //     "          for (int filter_x = 0; filter_x < convIntB[9]; ++filter_x) { \n" \
-    //     "            for (int in_channel = 0; in_channel < convIntB[4]; ++in_channel) { \n" \
-    //     "              int in_x = (out_x * convIntB[0] - convIntB[2]) + filter_x; \n" \
-    //     "              int in_y = (out_y * convIntB[1] - convIntB[3]) + filter_y; \n" \
-    //     "              if ((in_x >= 0) && (in_x < convIntB[5]) && (in_y >= 0) && \n" \
-    //     "                  (in_y < convIntB[6])) { \n" \
-    //     "                total += (convFloatB[2 + in_channel*convIntB[20] + in_x*convIntB[21] +in_y*convIntB[22] + batch*convIntB[23]] *  \n" \
-    //     "                        convFloatB[convIntB[36] + 2 + in_channel*convIntB[24] + filter_x*convIntB[25] + filter_y*convIntB[26] + out_channel*convIntB[27]]); \n" \
-    //     "              } \n" \
-    //     "            } \n" \
-    //     "          } \n" \
-    //     "        } \n" \
-    //     "        float bias_value = 0.0; \n" \
-    //     "        if (convIntB[38] > 0) { \n" \
-    //     "          bias_value = convFloatB[convIntB[36] + 2 + convIntB[37]+(out_channel*convIntB[28])]; \n" \
-    //     "        } \n" \
-    //     "        convFloatB[2 + convIntB[36] + convIntB[37] + convIntB[38] + out_channel*convIntB[32] + out_x*convIntB[33] + out_y*convIntB[34] + batch*convIntB[35]] = min(max(total + bias_value,convFloatB[0]),convFloatB[1]); \n" \
-    //     "      } \n" \
-    //     "  } \n" \
-    //     "}";
-
-    //     shaderc::Compiler compiler;
-    //     shaderc::CompileOptions options;
-
-    //     shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(
-    //       source.c_str(), source.size(), shaderc_glsl_compute_shader, "conv.glsl", options);
-
-    //     if (module.GetCompilationStatus() !=
-    //         shaderc_compilation_status_success) {
-    //     }
-
-    //     std::vector<uint32_t> code(module.cbegin(), module.cend());
-
-    //     // Stop timers
-    //     double wall1 = get_wall_time();
-    //     double cpu1  = get_cpu_time();
-    //     double wall = wall1 - wall0;
-    //     double cpu = cpu1 - cpu0;
-    //     __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "compileShader: %lf", wall);
-
-    //     VkShaderModuleCreateInfo createInfo = {};
-    //     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    //     createInfo.pCode = code.data();
-    //     createInfo.codeSize = sizeof(uint32_t)*code.size();
-        
-    //     // __android_log_print(ANDROID_LOG_INFO, "VulkanConv", "codeSize : %d", createInfo.codeSize);
-
-    //     VK_CHECK_RESULT(vkCreateShaderModule(device, &createInfo, NULL, &computeShaderModule));
-
-    //     VkPipelineShaderStageCreateInfo shaderStageCreateInfo = {};
-    //     shaderStageCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    //     shaderStageCreateInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-    //     shaderStageCreateInfo.module = computeShaderModule;
-    //     shaderStageCreateInfo.pName = "main";
-
-    //     VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {};
-    //     pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    //     pipelineLayoutCreateInfo.setLayoutCount = 1;
-    //     pipelineLayoutCreateInfo.pSetLayouts = &descriptorSetLayout; 
-        
-    //     VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, NULL, &pipelineLayout));
-
-    //     VkComputePipelineCreateInfo pipelineCreateInfo = {};
-    //     pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-    //     pipelineCreateInfo.stage = shaderStageCreateInfo;
-    //     pipelineCreateInfo.layout = pipelineLayout;
-
-    //     VK_CHECK_RESULT(vkCreateComputePipelines(
-    //         device, VK_NULL_HANDLE,
-    //         1, &pipelineCreateInfo,
-    //         NULL, &pipeline));
-    // }
-
     void createCommandBuffer() {
         VkCommandBufferBeginInfo beginInfo = {};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -953,7 +663,15 @@ public:
         int output_depth = dimSizes[7];
         int output_height = dimSizes[14];  
         int output_width = dimSizes[13];
-        vkCmdDispatch(commandBuffer, (output_depth-1)/8+1, (output_height-1)/8+1, (output_width-1)/8+1);
+
+        int d_output_depth = (((output_depth-1)/4+1)*4);
+
+        if((dimSizes[5] == 1) && (dimSizes[6] == 1) && (strideWidth == 1) && (strideHeight == 1) && (padWidth == 0) && (padHeight == 0)) {
+          vkCmdDispatch(commandBuffer, (d_output_depth/4-1)/8+1, (output_height*output_width*batches-1)/32+1, 1);
+        }
+        else {
+          vkCmdDispatch(commandBuffer, (d_output_depth/4-1)/8+1, (output_height-1)/8+1, (output_width-1)/8+1);
+        }
 
         VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffer)); // end recording commands.
     }
@@ -995,7 +713,17 @@ public:
         float *matCtmp;
         VK_CHECK_RESULT(vkMapMemory(device, bufferMemory,inputSizeAll+filterSizeAll+biasSizeAll, outputSizeAll, 0, (void **)&matCtmp));
 
-        std::memcpy(outputData, matCtmp, outputSize);
+        // std::memcpy(outputData, matCtmp, outputSize);
+
+        int output_depth = dimSizes[7];
+        int d_output_depth = (((output_depth-1)/4+1)*4);
+        int output_size = outputSize/sizeof(float);
+
+        for(int i = 0; i < output_size/output_depth; i++) {
+          for(int j = 0; j < output_depth; j++) {
+            outputData[i*output_depth + j] = matCtmp[i*d_output_depth + j];
+          }
+        }
 
         vkUnmapMemory(device, bufferMemory);  
     }
@@ -1359,6 +1087,9 @@ inline void OpenCLConv(const float* input_data, int input_size,
   input_size = (input_size/dim_sizes[0])*numchannel;
   filter_size = (filter_size/dim_sizes[0])*numchannel;
 
+  double wall01 = get_wall_time();
+  double cpu01  = get_cpu_time();
+
   float *inputfloat = (float*)clEnqueueMapBuffer(
               queue,
               d_input,
@@ -1406,10 +1137,25 @@ inline void OpenCLConv(const float* input_data, int input_size,
 
   clEnqueueUnmapMemObject(queue,d_input,(void *) inputfloat,0, NULL, &event_unmapinput);
   clEnqueueUnmapMemObject(queue,d_filter,(void *) filterfloat,0, NULL, &event_unmapfilter);
+
+  // // Stop timers
+    double wall11 = get_wall_time();
+    double cpu11  = get_cpu_time();
+
+    double wall1 = wall11 - wall01;
+    double cpu1 = cpu11 - cpu01;
+
+    // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelConverror: %d", err);
+
+    // note: andoird log
+    // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelmemcpy: %lf", wall1);
+
   // clEnqueueUnmapMemObject(queue,d_bias,(void *) biasfloat,0, NULL, &event_unmapbias);
 
   err = clEnqueueWriteBuffer(queue, d_bias, CL_TRUE, 0,
                                  bias_size*sizeof(float), bias_data, 0, NULL, &event_unmapbias);
+
+
 
   dim_strides[1] = (dim_strides[1]/dim_sizes[0])*numchannel;
   dim_strides[2] = (dim_strides[2]/dim_sizes[0])*numchannel;
@@ -1419,6 +1165,13 @@ inline void OpenCLConv(const float* input_data, int input_size,
   dim_strides[7] = (dim_strides[7]/dim_sizes[0])*numchannel;
   dim_sizes[0] = numchannel;
   dim_sizes[4] = numchannel;
+
+  int d_output_depth = (((output_depth-1)/4+1)*4);
+
+  //output
+  dim_strides[13] = (dim_strides[13]/dim_sizes[12])*d_output_depth/4;
+  dim_strides[14] = (dim_strides[14]/dim_sizes[12])*d_output_depth/4;
+  dim_strides[15] = (dim_strides[15]/dim_sizes[12])*d_output_depth/4;
 
   err = clEnqueueWriteBuffer(queue, d_dim_sizes, CL_TRUE, 0,
                                  16*sizeof(int), dim_sizes, 0, NULL, &event_writedimsizes);
@@ -1459,27 +1212,39 @@ inline void OpenCLConv(const float* input_data, int input_size,
   // double cpu0  = get_cpu_time();
 
 
+  cl_float4 omin = {output_activation_min, output_activation_min, output_activation_min, output_activation_min};
+  cl_float4 omax = {output_activation_max, output_activation_max, output_activation_max, output_activation_max};
+
   if((dim_sizes[6] == 1) && (dim_sizes[5] == 1) && (stride_width == 1) && (stride_height == 1) && (pad_width == 0) && (pad_height == 0)) {
+    // cl_mem d_output2 = clCreateBuffer(context, CL_MEM_WRITE_ONLY, output_size/output_depth*d_output_depth*sizeof(float), NULL, NULL);
+
+    int m_cols = dim_sizes[0];
+    int m_rows = dim_sizes[1]*dim_sizes[2]*dim_sizes[3];
+    int n_batch = dim_sizes[7];
+    int bias_stride = dim_strides[8];
+
     err  = clSetKernelArg(kernelmatmul, 0, sizeof(cl_mem), &d_input);
     err  = clSetKernelArg(kernelmatmul, 1, sizeof(cl_mem), &d_filter);
     err  = clSetKernelArg(kernelmatmul, 2, sizeof(cl_mem), &d_bias);
     err  = clSetKernelArg(kernelmatmul, 3, sizeof(cl_mem), &d_output);
-    err  = clSetKernelArg(kernelmatmul, 4, sizeof(int), &stride_width);
-    err  = clSetKernelArg(kernelmatmul, 5, sizeof(int), &stride_height);
-    err  = clSetKernelArg(kernelmatmul, 6, sizeof(int), &pad_width);
-    err  = clSetKernelArg(kernelmatmul, 7, sizeof(int), &pad_height);
-    err  = clSetKernelArg(kernelmatmul, 8, sizeof(cl_mem), &d_dim_sizes);
-    err  = clSetKernelArg(kernelmatmul, 9, sizeof(cl_mem), &d_dim_strides);
-    err  = clSetKernelArg(kernelmatmul, 10, sizeof(float), &output_activation_min);
-    err  = clSetKernelArg(kernelmatmul, 11, sizeof(float), &output_activation_max);
+    err  = clSetKernelArg(kernelmatmul, 4, sizeof(int), &m_rows);
+    err  = clSetKernelArg(kernelmatmul, 5, sizeof(int), &m_cols);
+    err  = clSetKernelArg(kernelmatmul, 6, sizeof(int), &n_batch);
+    err  = clSetKernelArg(kernelmatmul, 7, sizeof(int), &bias_stride);
+    err  = clSetKernelArg(kernelmatmul, 8, sizeof(cl_float4), &omin);
+    err  = clSetKernelArg(kernelmatmul, 9, sizeof(cl_float4), &omax);
 
     //conv matmul local
     // const size_t local[2] = { 8, 32 };
     // const size_t global[2] = { 8, (size_t) ((output_height*output_width*batches*output_depth-1)/32+1)*32 };  
     
     //conv matmul
+    // const size_t local[2] = { 8, 32 };
+    // const size_t global[2] = { (size_t) ((output_depth-1)/8+1)*8, (size_t) ((output_height*output_width*batches-1)/32+1)*32 };
+
+    // conv matmul block
     const size_t local[2] = { 8, 32 };
-    const size_t global[2] = { (size_t) ((output_depth-1)/8+1)*8, (size_t) ((output_height*output_width*batches-1)/32+1)*32 };
+    const size_t global[2] = { (size_t) ((d_output_depth/4-1)/8+1)*8, (size_t) ((output_height*output_width*batches-1)/32+1)*32 };
 
     double wall0 = get_wall_time();
     double cpu0  = get_cpu_time();
@@ -1498,65 +1263,49 @@ inline void OpenCLConv(const float* input_data, int input_size,
     // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelConverror: %d", err);
 
     // note: andoird log
-    __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelOclConv: %lf", wall);
-  }
-  else if((stride_width == 1) && (stride_height == 1) && (pad_width == 0) && (pad_height == 0)) {
-    err  = clSetKernelArg(kernellocalall, 0, sizeof(cl_mem), &d_input);
-    err  = clSetKernelArg(kernellocalall, 1, sizeof(cl_mem), &d_filter);
-    err  = clSetKernelArg(kernellocalall, 2, sizeof(cl_mem), &d_bias);
-    err  = clSetKernelArg(kernellocalall, 3, sizeof(cl_mem), &d_output);
-    err  = clSetKernelArg(kernellocalall, 4, sizeof(int), &stride_width);
-    err  = clSetKernelArg(kernellocalall, 5, sizeof(int), &stride_height);
-    err  = clSetKernelArg(kernellocalall, 6, sizeof(int), &pad_width);
-    err  = clSetKernelArg(kernellocalall, 7, sizeof(int), &pad_height);
-    err  = clSetKernelArg(kernellocalall, 8, sizeof(cl_mem), &d_dim_sizes);
-    err  = clSetKernelArg(kernellocalall, 9, sizeof(cl_mem), &d_dim_strides);
-    err  = clSetKernelArg(kernellocalall, 10, sizeof(float), &output_activation_min);
-    err  = clSetKernelArg(kernellocalall, 11, sizeof(float), &output_activation_max);
+    __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelOclConvMatmul: %lf", wall);
 
-    //conv baru with local
-    const size_t local[2] = { 8, 16 };
-    const size_t global[2] = { (size_t) ((output_height-1)/8+1)*8*batches, (size_t) ((output_width-1)/16+1)*16*output_depth };
-    
-    double wall0 = get_wall_time();
-    double cpu0  = get_cpu_time();
+    cl_float *host_result = (cl_float*)clEnqueueMapBuffer(
+            queue,
+            d_output,
+            CL_TRUE,
+            CL_MAP_READ,
+            0,
+            output_size/output_depth*d_output_depth*sizeof(float),
+            0, NULL, NULL, NULL);
 
-    err = clEnqueueNDRangeKernel(queue, kernellocalall, 2, NULL, global, local, 0, NULL, NULL);
+    for(int i = 0; i < output_size/output_depth; i++) {
+      for(int j = 0; j < output_depth; j++) {
+        output_data[i*output_depth + j] = host_result[i*d_output_depth + j];
+      }
+    }
 
+    clEnqueueUnmapMemObject(queue,d_output,(void *) host_result,0, NULL, NULL);
     clFinish(queue);
-
-    // // Stop timers
-    double wall1 = get_wall_time();
-    double cpu1  = get_cpu_time();
-
-    double wall = wall1 - wall0;
-    double cpu = cpu1 - cpu0;
-
-    // note: andoird log
-    __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelOclConv: %lf", wall);
+    // clReleaseMemObject(d_output2);
   }
   else {
-    err  = clSetKernelArg(kernellocalfilter, 0, sizeof(cl_mem), &d_input);
-    err  = clSetKernelArg(kernellocalfilter, 1, sizeof(cl_mem), &d_filter);
-    err  = clSetKernelArg(kernellocalfilter, 2, sizeof(cl_mem), &d_bias);
-    err  = clSetKernelArg(kernellocalfilter, 3, sizeof(cl_mem), &d_output);
-    err  = clSetKernelArg(kernellocalfilter, 4, sizeof(int), &stride_width);
-    err  = clSetKernelArg(kernellocalfilter, 5, sizeof(int), &stride_height);
-    err  = clSetKernelArg(kernellocalfilter, 6, sizeof(int), &pad_width);
-    err  = clSetKernelArg(kernellocalfilter, 7, sizeof(int), &pad_height);
-    err  = clSetKernelArg(kernellocalfilter, 8, sizeof(cl_mem), &d_dim_sizes);
-    err  = clSetKernelArg(kernellocalfilter, 9, sizeof(cl_mem), &d_dim_strides);
-    err  = clSetKernelArg(kernellocalfilter, 10, sizeof(float), &output_activation_min);
-    err  = clSetKernelArg(kernellocalfilter, 11, sizeof(float), &output_activation_max);
+    err  = clSetKernelArg(kernelconv, 0, sizeof(cl_mem), &d_input);
+    err  = clSetKernelArg(kernelconv, 1, sizeof(cl_mem), &d_filter);
+    err  = clSetKernelArg(kernelconv, 2, sizeof(cl_mem), &d_bias);
+    err  = clSetKernelArg(kernelconv, 3, sizeof(cl_mem), &d_output);
+    err  = clSetKernelArg(kernelconv, 4, sizeof(int), &stride_width);
+    err  = clSetKernelArg(kernelconv, 5, sizeof(int), &stride_height);
+    err  = clSetKernelArg(kernelconv, 6, sizeof(int), &pad_width);
+    err  = clSetKernelArg(kernelconv, 7, sizeof(int), &pad_height);
+    err  = clSetKernelArg(kernelconv, 8, sizeof(cl_mem), &d_dim_sizes);
+    err  = clSetKernelArg(kernelconv, 9, sizeof(cl_mem), &d_dim_strides);
+    err  = clSetKernelArg(kernelconv, 10, sizeof(cl_float4), &omin);
+    err  = clSetKernelArg(kernelconv, 11, sizeof(cl_float4), &omax);
 
     //conv baru with local
-    const size_t local[2] = { 8, 16 };
-    const size_t global[2] = { (size_t) ((output_height-1)/8+1)*8*batches, (size_t) ((output_width-1)/16+1)*16*output_depth };
+    const size_t local[2] = { 8, 32 };
+    const size_t global[2] = { (size_t) ((d_output_depth*batches/4-1)/8+1)*8, (size_t) ((output_width*output_height-1)/32+1)*32 };
     
     double wall0 = get_wall_time();
     double cpu0  = get_cpu_time();
     
-    err = clEnqueueNDRangeKernel(queue, kernellocalfilter, 2, NULL, global, local, 0, NULL, NULL);
+    err = clEnqueueNDRangeKernel(queue, kernelconv, 2, NULL, global, local, 0, NULL, NULL);
 
     clFinish(queue);
 
@@ -1567,9 +1316,106 @@ inline void OpenCLConv(const float* input_data, int input_size,
     double wall = wall1 - wall0;
     double cpu = cpu1 - cpu0;
 
+    // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelConverror: %d", err);
+
     // note: andoird log
-    __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelOclConv: %lf", wall);
+    __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelOclConvNormal: %lf", wall);
+
+    // clEnqueueReadBuffer(queue, d_output, CL_TRUE, 0, output_size*sizeof(float), output_data, 0, NULL, NULL );
+    cl_float *host_result = (cl_float*)clEnqueueMapBuffer(
+            queue,
+            d_output,
+            CL_TRUE,
+            CL_MAP_READ,
+            0,
+            output_size/output_depth*d_output_depth*sizeof(float),
+            0, NULL, NULL, NULL);
+
+    for(int i = 0; i < output_size/output_depth; i++) {
+      for(int j = 0; j < output_depth; j++) {
+        output_data[i*output_depth + j] = host_result[i*d_output_depth + j];
+      }
+    }
+
+    clEnqueueUnmapMemObject(queue,d_output,(void *) host_result,0, NULL, NULL);
+    clFinish(queue);
   }
+  // else if((stride_width == 1) && (stride_height == 1) && (pad_width == 0) && (pad_height == 0)) {
+  //   err  = clSetKernelArg(kernellocalall, 0, sizeof(cl_mem), &d_input);
+  //   err  = clSetKernelArg(kernellocalall, 1, sizeof(cl_mem), &d_filter);
+  //   err  = clSetKernelArg(kernellocalall, 2, sizeof(cl_mem), &d_bias);
+  //   err  = clSetKernelArg(kernellocalall, 3, sizeof(cl_mem), &d_output);
+  //   err  = clSetKernelArg(kernellocalall, 4, sizeof(int), &stride_width);
+  //   err  = clSetKernelArg(kernellocalall, 5, sizeof(int), &stride_height);
+  //   err  = clSetKernelArg(kernellocalall, 6, sizeof(int), &pad_width);
+  //   err  = clSetKernelArg(kernellocalall, 7, sizeof(int), &pad_height);
+  //   err  = clSetKernelArg(kernellocalall, 8, sizeof(cl_mem), &d_dim_sizes);
+  //   err  = clSetKernelArg(kernellocalall, 9, sizeof(cl_mem), &d_dim_strides);
+  //   err  = clSetKernelArg(kernellocalall, 10, sizeof(float), &output_activation_min);
+  //   err  = clSetKernelArg(kernellocalall, 11, sizeof(float), &output_activation_max);
+
+  //   //conv baru with local
+  //   const size_t local[2] = { 8, 16 };
+  //   const size_t global[2] = { (size_t) ((output_height-1)/8+1)*8*batches, (size_t) ((output_width-1)/16+1)*16*output_depth };
+    
+  //   double wall0 = get_wall_time();
+  //   double cpu0  = get_cpu_time();
+
+  //   err = clEnqueueNDRangeKernel(queue, kernellocalall, 2, NULL, global, local, 0, NULL, NULL);
+
+  //   clFinish(queue);
+
+  //   // // Stop timers
+  //   double wall1 = get_wall_time();
+  //   double cpu1  = get_cpu_time();
+
+  //   double wall = wall1 - wall0;
+  //   double cpu = cpu1 - cpu0;
+
+  //   // note: andoird log
+  //   __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelOclConv: %lf", wall);
+
+  //   clEnqueueReadBuffer(queue, d_output, CL_TRUE, 0, output_size*sizeof(float), output_data, 0, NULL, NULL );
+  // }
+  // else {
+  //   err  = clSetKernelArg(kernellocalfilter, 0, sizeof(cl_mem), &d_input);
+  //   err  = clSetKernelArg(kernellocalfilter, 1, sizeof(cl_mem), &d_filter);
+  //   err  = clSetKernelArg(kernellocalfilter, 2, sizeof(cl_mem), &d_bias);
+  //   err  = clSetKernelArg(kernellocalfilter, 3, sizeof(cl_mem), &d_output);
+  //   err  = clSetKernelArg(kernellocalfilter, 4, sizeof(int), &stride_width);
+  //   err  = clSetKernelArg(kernellocalfilter, 5, sizeof(int), &stride_height);
+  //   err  = clSetKernelArg(kernellocalfilter, 6, sizeof(int), &pad_width);
+  //   err  = clSetKernelArg(kernellocalfilter, 7, sizeof(int), &pad_height);
+  //   err  = clSetKernelArg(kernellocalfilter, 8, sizeof(cl_mem), &d_dim_sizes);
+  //   err  = clSetKernelArg(kernellocalfilter, 9, sizeof(cl_mem), &d_dim_strides);
+  //   err  = clSetKernelArg(kernellocalfilter, 10, sizeof(float), &output_activation_min);
+  //   err  = clSetKernelArg(kernellocalfilter, 11, sizeof(float), &output_activation_max);
+
+  //   //conv baru with local
+  //   const size_t local[2] = { 8, 32 };
+  //   const size_t global[2] = { (size_t) ((output_height-1)/8+1)*8*batches, (size_t) ((output_width-1)/32+1)*32*output_depth };
+    
+  //   double wall0 = get_wall_time();
+  //   double cpu0  = get_cpu_time();
+    
+  //   err = clEnqueueNDRangeKernel(queue, kernellocalfilter, 2, NULL, global, local, 0, NULL, NULL);
+
+  //   clFinish(queue);
+
+  //   // // Stop timers
+  //   double wall1 = get_wall_time();
+  //   double cpu1  = get_cpu_time();
+
+  //   double wall = wall1 - wall0;
+  //   double cpu = cpu1 - cpu0;
+
+  //   __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelConverror: %d", err);
+
+  //   // note: andoird log
+  //   __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelOclConv: %lf", wall);
+
+  //   clEnqueueReadBuffer(queue, d_output, CL_TRUE, 0, output_size*sizeof(float), output_data, 0, NULL, NULL );
+  // }
 
   // err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global, local, 0, NULL, NULL);
 
@@ -1590,7 +1436,7 @@ inline void OpenCLConv(const float* input_data, int input_size,
   // wall0 = get_wall_time();
   // cpu0  = get_cpu_time();
 
-  clEnqueueReadBuffer(queue, d_output, CL_TRUE, 0, output_size*sizeof(float), output_data, 0, NULL, NULL );
+  // clEnqueueReadBuffer(queue, d_output, CL_TRUE, 0, output_size*sizeof(float), output_data, 0, NULL, NULL );
   
   // half *outputHalf = (half*)clEnqueueMapBuffer(
   //             queue,
@@ -1607,7 +1453,7 @@ inline void OpenCLConv(const float* input_data, int input_size,
 
   // clEnqueueUnmapMemObject(queue,d_output,(void *) outputHalf,0, NULL, NULL);
 
-  clFinish(queue);
+  // clFinish(queue);
 }
 
 inline void Conv(const float* input_data, const Dims<4>& input_dims,
@@ -1795,25 +1641,27 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
                  float* output_data, const Dims<4>& output_dims,
                  float* im2col_data, const Dims<4>& im2col_dims,
                  cl_context context_cl, cl_command_queue queue, cl_program program, cl_mem cl_mem_arr[6], int buffsizes[4],
-                 VkPhysicalDevice physicalDevice, VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, 
+                 VkPhysicalDevice physicalDevice, VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, VkPipeline pipelineConvMatmul, VkPipelineLayout pipelineLayoutConvMatmul,
     VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex,
     VkCommandPool conv_commandPool, VkCommandBuffer conv_commandBuffer, VkBuffer conv_matrixA, VkBuffer conv_matrixB, VkBuffer conv_matrixC, VkBuffer conv_matrixSizes, VkDeviceMemory conv_bufferMemory) {
   
-  if((kernellocalall == NULL) || (kernellocalfilter == NULL) || (kernelmatmul == NULL)) {
-    // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelmasuksekali");    
+  // // if((kernellocalall == NULL) || (kernellocalfilter == NULL) || (kernelmatmul == NULL)) {
+  // if((kernelconv == NULL) || (kernelmatmul == NULL)) {
+  //   // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelmasuksekali");    
       
-    kernellocalall = clCreateKernel(program, "convlocalall", NULL);
-    kernellocalfilter = clCreateKernel(program, "convlocalfilter", NULL);
-    kernelmatmul = clCreateKernel(program, "convmatmul", NULL);
+  //   kernelconv = clCreateKernel(program, "convfloat", NULL);
+  //   // kernellocalall = clCreateKernel(program, "convlocalall", NULL);
+  //   // kernellocalfilter = clCreateKernel(program, "convlocalfilter", NULL);
+  //   kernelmatmul = clCreateKernel(program, "convmatmulblock", NULL);
 
-    // d_input = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[0]*sizeof(half), NULL, NULL);
-    // d_filter = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[1]*sizeof(half), NULL, NULL);
-    // d_bias = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[2]*sizeof(half), NULL, NULL);
-    // d_output = clCreateBuffer(context_cl, CL_MEM_WRITE_ONLY, buffsizes[3]*sizeof(half), NULL, NULL);
-    // d_dim_sizes = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, 16*sizeof(int), NULL, NULL);
-    // d_dim_strides = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, 16*sizeof(int), NULL, NULL);
+  //   // d_input = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[0]*sizeof(half), NULL, NULL);
+  //   // d_filter = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[1]*sizeof(half), NULL, NULL);
+  //   // d_bias = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[2]*sizeof(half), NULL, NULL);
+  //   // d_output = clCreateBuffer(context_cl, CL_MEM_WRITE_ONLY, buffsizes[3]*sizeof(half), NULL, NULL);
+  //   // d_dim_sizes = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, 16*sizeof(int), NULL, NULL);
+  //   // d_dim_strides = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, 16*sizeof(int), NULL, NULL);
 
-  }
+  // }
 
   // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelstridew: %d", stride_width);
   // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelstrideh: %d", stride_width);
@@ -2014,15 +1862,15 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
     //       half_cast<half>(output_activation_min), half_cast<half>(output_activation_max),
     //       context_cl, queue, program, cl_mem_arr);
 
-        OpenCLConv(input_data, input_size,
-          filter_data, filter_size,
-          bias_data, bias_size,
-          output_data, output_size,
-          stride_width, stride_height, 
-          pad_width, pad_height, 
-          sizes, strides,
-          output_activation_min, output_activation_max,
-          context_cl, queue, program, cl_mem_arr);
+        // OpenCLConv(input_data, input_size,
+        //   filter_data, filter_size,
+        //   bias_data, bias_size,
+        //   output_data, output_size,
+        //   stride_width, stride_height, 
+        //   pad_width, pad_height, 
+        //   sizes, strides,
+        //   output_activation_min, output_activation_max,
+        //   context_cl, queue, program, cl_mem_arr);
 
   // for(int i = 0; i < output_size; i++) {
   //   // half halfTmp(vector[i]);
@@ -2037,17 +1885,32 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
   // double wall0 = get_wall_time();
   // double cpu0  = get_cpu_time();
 
-  // vulkanTestConv(buffsizes, input_data, input_size,
-  //         filter_data, filter_size,
-  //         bias_data, bias_size,
-  //         output_data, output_size,
-  //         stride_width, stride_height, 
-  //         pad_width, pad_height, 
-  //         sizes, strides,
-  //         output_activation_min, output_activation_max,
-  //         physicalDevice, device, pipelineConv, pipelineLayoutConv, 
-  //         descriptorSetLayoutConv, queueV, queueFamilyIndex,
-  //         conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixB, conv_matrixC, conv_matrixSizes, conv_bufferMemory);
+  if((filter_width == 1) && (filter_height == 1) && (stride_width == 1) && (stride_height == 1) && (pad_width == 0) && (pad_height == 0))
+  {__android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "runkernelmasuksini1x1");
+  vulkanTestConv(buffsizes, input_data, input_size,
+          filter_data, filter_size,
+          bias_data, bias_size,
+          output_data, output_size,
+          stride_width, stride_height, 
+          pad_width, pad_height, 
+          sizes, strides,
+          output_activation_min, output_activation_max,
+          physicalDevice, device, pipelineConvMatmul, pipelineLayoutConvMatmul, 
+          descriptorSetLayoutConv, queueV, queueFamilyIndex,
+          conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixB, conv_matrixC, conv_matrixSizes, conv_bufferMemory);
+  }
+  else
+  vulkanTestConv(buffsizes, input_data, input_size,
+        filter_data, filter_size,
+        bias_data, bias_size,
+        output_data, output_size,
+        stride_width, stride_height, 
+        pad_width, pad_height, 
+        sizes, strides,
+        output_activation_min, output_activation_max,
+        physicalDevice, device, pipelineConv, pipelineLayoutConv, 
+        descriptorSetLayoutConv, queueV, queueFamilyIndex,
+        conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixB, conv_matrixC, conv_matrixSizes, conv_bufferMemory);
 
   // // // Stop timers
   // // double wall1 = get_wall_time();

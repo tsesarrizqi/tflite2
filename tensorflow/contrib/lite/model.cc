@@ -62,52 +62,8 @@ limitations under the License.
 }
 
 const char *kernelSource =           "\n" \
-"#pragma OPENCL EXTENSION cl_khr_fp16 : enable \n" \
-"__kernel void convhalf(__global half4* input_data,    \n" \
-"          __constant half4* filter_data,    \n" \
-"          __global half* bias_data,    \n" \
-"          __global half* output_data,   \n" \
-"          int stride_width, int stride_height,    \n" \
-"          int pad_width, int pad_height,    \n" \
-"          __global int16* dim_sizes0, __global int16* dim_strides0,   \n" \
-"          half output_activation_min, half output_activation_max) {   \n" \
-"     \n" \
-"    int batchdepth = get_global_id(0);   \n" \
-"    int widthheight = get_global_id(1);   \n" \
-"    int16 dim_sizes = dim_sizes0[0];   \n" \
-"    int output_depth = dim_sizes.s7;  \n" \
-"    int output_height = dim_sizes.se;   \n" \
-"    int batch = batchdepth/output_depth;   \n" \
-"    int out_channel = batchdepth\%output_depth;   \n" \
-"    int out_x = widthheight/output_height;   \n" \
-"    int out_y = widthheight\%output_height;   \n" \
-"    if((batch < dim_sizes.s3) && (out_x < dim_sizes.sd) && (out_y < output_height) && (out_channel < output_depth)) {   \n" \
-"            int16 dim_strides = dim_strides0[0];   \n" \
-"            half total = 0.0;   \n" \
-"            for (int filter_y = 0; filter_y < dim_sizes.s6; ++filter_y) {   \n" \
-"              for (int filter_x = 0; filter_x < dim_sizes.s5; ++filter_x) {   \n" \
-"                for (int in_channel = 0; in_channel < dim_sizes.s0/4; ++in_channel) {   \n" \
-"                  int in_x = (out_x * stride_width) - pad_width + filter_x;   \n" \
-"                  int in_y = (out_y * stride_height) - pad_height + filter_y;   \n" \
-"                  if ((in_x >= 0) && (in_x < dim_sizes.s1) && (in_y >= 0) &&   \n" \
-"                      (in_y < dim_sizes.s2)) {   \n" \
-"                    half4 input_value = input_data[in_channel*dim_strides.s0 + in_x*dim_strides.s1/4 + in_y*dim_strides.s2/4 + batch*dim_strides.s3/4];   \n" \
-"                    half4 filter_value = filter_data[in_channel*dim_strides.s4 + filter_x*dim_strides.s5/4 + filter_y*dim_strides.s6/4 + out_channel*dim_strides.s7/4];  \n" \
-"                    total += dot(input_value,filter_value);   \n" \
-"                  }   \n" \
-"                }   \n" \
-"              }   \n" \
-"            }   \n" \
-"            half bias_value = 0.0;   \n" \
-"            if (bias_data) {   \n" \
-"              bias_value = bias_data[out_channel*dim_strides.s8];   \n" \
-"            } \n" \
-"            output_data[out_channel*dim_strides.sc + out_x*dim_strides.sd + out_y*dim_strides.se + batch*dim_strides.sf] = min(max(total + bias_value, output_activation_min), output_activation_max); \n" \
-"    }  \n" \
-"}   \n" \
-"  \n" \
-"__kernel void convfloat(__global float4* input_data,    \n" \
-"          __constant float4* filter_data,    \n" \
+"__kernel void convfloatback(__global float4* input_data,    \n" \
+"          __global float4* filter_data,    \n" \
 "          __global float* bias_data,    \n" \
 "          __global float* output_data,   \n" \
 "          int stride_width, int stride_height,    \n" \
@@ -148,58 +104,102 @@ const char *kernelSource =           "\n" \
 "            output_data[out_channel*dim_strides.sc + out_x*dim_strides.sd + out_y*dim_strides.se + batch*dim_strides.sf] = min(max(total + bias_value, output_activation_min), output_activation_max); \n" \
 "    }  \n" \
 "}   \n" \
+"__kernel void convfloat(__global float4* input_data,    \n" \
+"          __global float4* filter_data,    \n" \
+"          __global float4* bias_data,    \n" \
+"          __global float4* output_data,   \n" \
+"          int stride_width, int stride_height,    \n" \
+"          int pad_width, int pad_height,    \n" \
+"          __global int16* dim_sizes0, __global int16* dim_strides0,   \n" \
+"          float4 output_activation_min, float4 output_activation_max) {   \n" \
+"     \n" \
+"    int batchdepth = get_global_id(0);   \n" \
+"    int widthheight = get_global_id(1);   \n" \
+"    int16 dim_sizes = dim_sizes0[0];   \n" \
+"    int output_depth = dim_sizes.s7;  \n" \
+"    int output_height = dim_sizes.se;   \n" \
+"    int output_depth4 = (output_depth-1)/4+1;   \n" \
+"    int batch = batchdepth/output_depth4;   \n" \
+"    int out_channel = (batchdepth\%output_depth4)*4;   \n" \
+"    int out_x = widthheight/output_height;   \n" \
+"    int out_y = widthheight\%output_height;   \n" \
+"    if((batch < dim_sizes.s3) && (out_x < dim_sizes.sd) && (out_y < output_height) && (out_channel < output_depth)) {   \n" \
+"            int16 dim_strides = dim_strides0[0];   \n" \
+"            float4 total = {0.0, 0.0, 0.0, 0.0};   \n" \
+"            for (int filter_y = 0; filter_y < dim_sizes.s6; ++filter_y) {   \n" \
+"              for (int filter_x = 0; filter_x < dim_sizes.s5; ++filter_x) {   \n" \
+"                for (int in_channel = 0; in_channel < dim_sizes.s0/4; ++in_channel) {   \n" \
+"                  int in_x = (out_x * stride_width) - pad_width + filter_x;   \n" \
+"                  int in_y = (out_y * stride_height) - pad_height + filter_y;   \n" \
+"                  if ((in_x >= 0) && (in_x < dim_sizes.s1) && (in_y >= 0) &&   \n" \
+"                      (in_y < dim_sizes.s2)) {   \n" \
+"                    float4 input_value = input_data[in_channel*dim_strides.s0 + in_x*dim_strides.s1/4 + in_y*dim_strides.s2/4 + batch*dim_strides.s3/4];   \n" \
+"                    total.x += dot(input_value,filter_data[in_channel*dim_strides.s4 + filter_x*dim_strides.s5/4 + filter_y*dim_strides.s6/4 + out_channel*dim_strides.s7/4]);   \n" \
+"                    if(out_channel+1 < output_depth) total.y += dot(input_value,filter_data[in_channel*dim_strides.s4 + filter_x*dim_strides.s5/4 + filter_y*dim_strides.s6/4 + (out_channel+1)*dim_strides.s7/4]);   \n" \
+"                    if(out_channel+2 < output_depth) total.z += dot(input_value,filter_data[in_channel*dim_strides.s4 + filter_x*dim_strides.s5/4 + filter_y*dim_strides.s6/4 + (out_channel+2)*dim_strides.s7/4]);   \n" \
+"                    if(out_channel+3 < output_depth) total.w += dot(input_value,filter_data[in_channel*dim_strides.s4 + filter_x*dim_strides.s5/4 + filter_y*dim_strides.s6/4 + (out_channel+3)*dim_strides.s7/4]);   \n" \
+"                  }   \n" \
+"                }   \n" \
+"              }   \n" \
+"            }   \n" \
+"            if (bias_data) {   \n" \
+"              total = total + bias_data[out_channel*dim_strides.s8/4];   \n" \
+"            } \n" \
+"            output_data[out_channel*dim_strides.sc/4 + out_x*dim_strides.sd + out_y*dim_strides.se + batch*dim_strides.sf] = min(max(total, output_activation_min), output_activation_max); \n" \
+"    }  \n" \
+"}   \n" \
 "__kernel void convlocalfilter(__global float4* input_data,    \n" \
-"          __constant float4* filter_data,    \n" \
+"          __global float4* filter_data,    \n" \
 "          __global float* bias_data,    \n" \
 "          __global float* output_data,   \n" \
 "          int stride_width, int stride_height,    \n" \
 "          int pad_width, int pad_height,    \n" \
-"          __global int16* dim_sizes0, __global int16* dim_strides0,   \n" \
+"          __global int* dim_sizes, __global int* dim_strides,   \n" \
 "          float output_activation_min, float output_activation_max) {   \n" \
 "     \n" \
+"    __local float4 localfilter[5][5]; \n" \
 "    int local_y = get_local_id(0);   \n" \
 "    int local_x = get_local_id(1);   \n" \
 "    int ychannel = get_global_id(0);   \n" \
 "    int xchannel = get_global_id(1);   \n" \
-"    int16 dim_sizes = dim_sizes0[0];   \n" \
-"    int16 dim_strides = dim_strides0[0];   \n" \
-"    int xsize = ((dim_sizes.sd-1)/16+1)*16;   \n" \
-"    int ysize = ((dim_sizes.se-1)/8+1)*8;   \n" \
+"    int xsize = ((dim_sizes[13]-1)/32+1)*32;   \n" \
+"    int ysize = ((dim_sizes[14]-1)/8+1)*8;   \n" \
 "    int out_x = xchannel\%xsize;   \n" \
 "    int out_y = ychannel\%ysize;   \n" \
 "    int out_channel = xchannel/xsize;   \n" \
 "    int batch = ychannel/ysize;   \n" \
-"    __local float4 localfilter[8][8]; \n" \
-"      float total = 0.0;   \n" \
-"      for (int in_channel = 0; in_channel < dim_sizes.s0/4; ++in_channel) {   \n" \
+"    float total = 0.0;   \n" \
+"    int in_x = 0;   \n" \
+"    int in_y = 0;   \n" \
+"      for (int in_channel = 0; in_channel < dim_sizes[0]/4; ++in_channel) {   \n" \
 "        barrier(CLK_LOCAL_MEM_FENCE);   \n" \
 "        //load filter  \n" \
-"        if((local_y < dim_sizes.s6) && (local_x < dim_sizes.s5)) {   \n" \
-"          localfilter[local_y][local_x] = filter_data[in_channel*dim_strides.s4 + local_x*dim_strides.s5/4 + local_y*dim_strides.s6/4 + out_channel*dim_strides.s7/4];   \n" \
+"        if((local_y < dim_sizes[6]) && (local_x < dim_sizes[5])) {   \n" \
+"          localfilter[local_y][local_x] = filter_data[in_channel*dim_strides[4] + local_x*dim_strides[5]/4 + local_y*dim_strides[6]/4 + out_channel*dim_strides[7]/4];   \n" \
 "        }   \n" \
 "        barrier(CLK_LOCAL_MEM_FENCE);   \n" \
-"        if((out_x < dim_sizes.sd) && (out_y < dim_sizes.se)) {   \n" \
-"          for (int filter_y = 0; filter_y < dim_sizes.s6; ++filter_y) {   \n" \
-"            for (int filter_x = 0; filter_x < dim_sizes.s5; ++filter_x) {   \n" \
-"              int in_x = (out_x * stride_width) - pad_width + filter_x;   \n" \
-"              int in_y = (out_y * stride_height) - pad_height + filter_y;   \n" \
-"              if ((in_x >= 0) && (in_x < dim_sizes.s1) && (in_y >= 0) &&   \n" \
-"                  (in_y < dim_sizes.s2)) {   \n" \
-"                float4 input_value = input_data[in_channel*dim_strides.s0 + in_x*dim_strides.s1/4 + in_y*dim_strides.s2/4 + batch*dim_strides.s3/4];   \n" \
-"                float4 filter_value = localfilter[filter_y][filter_x];  \n" \
-"                // float4 filter_value = filter_data[in_channel*dim_strides.s4 + filter_x*dim_strides.s5/4 + filter_y*dim_strides.s6/4 + out_channel*dim_strides.s7/4];  \n" \
-"                total += dot(input_value,filter_value);   \n" \
+"        if((out_x < dim_sizes[13]) && (out_y < dim_sizes[14])) {   \n" \
+"          for (int filter_y = 0; filter_y < dim_sizes[6]; ++filter_y) {   \n" \
+"            for (int filter_x = 0; filter_x < dim_sizes[5]; ++filter_x) {   \n" \
+"              in_x = (out_x * stride_width) - pad_width + filter_x;   \n" \
+"              in_y = (out_y * stride_height) - pad_height + filter_y;   \n" \
+"              if ((in_x >= 0) && (in_x < dim_sizes[1]) && (in_y >= 0) &&   \n" \
+"                  (in_y < dim_sizes[2])) {   \n" \
+"                //float4 input_value = input_data[in_channel*dim_strides[0] + in_x*dim_strides[1]/4 + in_y*dim_strides[2]/4 + batch*dim_strides[3]/4];   \n" \
+"                //float4 filter_value = localfilter[filter_y][filter_x];  \n" \
+"                // float4 filter_value = filter_data[in_channel*dim_strides[4] + filter_x*dim_strides[5]/4 + filter_y*dim_strides[6]/4 + out_channel*dim_strides[7]/4];  \n" \
+"                total += dot(input_data[in_channel*dim_strides[0] + in_x*dim_strides[1]/4 + in_y*dim_strides[2]/4 + batch*dim_strides[3]/4],localfilter[filter_y][filter_x]);   \n" \
 "              }   \n" \
 "            }   \n" \
 "          }   \n" \
 "        }   \n" \
 "      }  \n" \
-"      if((out_x < dim_sizes.sd) && (out_y < dim_sizes.se)) {   \n" \
-"        float bias_value = 0.0;   \n" \
-"        if (bias_data) {   \n" \
-"          bias_value = bias_data[out_channel*dim_strides.s8];   \n" \
+"      if((out_x < dim_sizes[13]) && (out_y < dim_sizes[14])) {   \n" \
+"        //float bias_value = 0.0;   \n" \
+"        if (dim_sizes[8] > 0) {   \n" \
+"          total = min(max(total + bias_data[out_channel*dim_strides[8]], output_activation_min), output_activation_max);   \n" \
 "        } \n" \
-"        output_data[out_channel*dim_strides.sc + out_x*dim_strides.sd + out_y*dim_strides.se + batch*dim_strides.sf] = min(max(total + bias_value, output_activation_min), output_activation_max); \n" \
+"        output_data[out_channel*dim_strides[12] + out_x*dim_strides[13] + out_y*dim_strides[14] + batch*dim_strides[15]] = total; \n" \
 "      }   \n" \
 "} \n" \
 "__kernel void convlocalall(__global float4* input_data,    \n" \
@@ -337,46 +337,57 @@ const char *kernelSource =           "\n" \
 "        } \n" \
 "    } \n" \
 "} \n" \
-"__kernel void transpose(__global float4* input, __global float* output,\n" \
-"    int rows, int cols) {         \n" \
-"   int row = get_global_id(0);                                      \n" \
-"   int col4 = get_global_id(1);                                      \n" \
-"   const float4 in_value = input[row*(cols/4)+col4];\n" \
-"   output[(col4*4+0)*rows + row] = in_value.x;\n" \
-"   output[(col4*4+1)*rows + row] = in_value.y;\n" \
-"   output[(col4*4+2)*rows + row] = in_value.z;\n" \
-"   output[(col4*4+3)*rows + row] = in_value.w;\n" \
-"}      \n" \
-"__kernel void matrixVectorMulF4half(__global half4* result,    \n" \
-"    const __global half4* matrix,    \n" \
-"    const __global half4* vector,     \n" \
-"    int m_cols,    \n" \
-"    int m_rows,    \n" \
-"    int n_batch)    \n" \
-"{  \n" \
-"    int row = get_global_id(0)*4; \n" \
-"    int localidx = get_local_id(1); \n" \
-"    __local half4 Aacc[32]; \n" \
-"    if (row < m_rows) { \n" \
-"        half4 sum = {0.0, 0.0, 0.0, 0.0}; \n" \
-"        int starti = localidx*(m_cols/128); \n" \
-"        for(int i = starti; i < starti+(m_cols/128); i++){ \n" \
-"            half4 currb = vector[i];\n" \
-"            sum.x += dot(matrix[(row*m_cols/4) + i],currb);\n" \
-"            sum.y += dot(matrix[((row+1)*m_cols/4) + i],currb); \n" \
-"            sum.z += dot(matrix[((row+2)*m_cols/4) + i],currb);\n" \
-"            sum.w += dot(matrix[((row+3)*m_cols/4) + i],currb);\n" \
-"        } \n" \
-"        Aacc[localidx] = sum; \n" \
+"__kernel void convmatmulblock(__global float4* input_data,    \n" \
+"          __global float4* filter_data,    \n" \
+"          __global float4* bias_data,    \n" \
+"          __global float4* output_data,   \n" \
+"          int m_rows, int m_cols, int n_batch,    \n" \
+"          int bias_stride,   \n" \
+"          float4 output_activation_min, float4 output_activation_max) {   \n" \
+"    const int row = get_local_id(1);  \n" \
+"    const int col = get_local_id(0);  \n" \
+"    const int globalRow = 32*get_group_id(1) + row;   \n" \
+"    int globalCol = 32*get_group_id(0) + row;  \n" \
+"    float4 acc = { 0.0, 0.0, 0.0, 0.0 };      \n" \
+"    int tiledColRow = 0;     \n" \
+"    __local float4 Asub[32][8];      \n" \
+"    __local float4 Bsub[8][32];      \n" \
+"    for(int t = 0; t < ((m_cols/4-1)/8+1); t++) {      \n" \
+"        tiledColRow = t*8 + col;       \n" \
+"        if((globalRow < m_rows) && (tiledColRow < m_cols/4)) {     \n" \
+"           Asub[row][col] = input_data[globalRow*(m_cols/4) + tiledColRow];     \n" \
+"        }      \n" \
+"        else {     \n" \
+"           float4 tmp = { 0.0, 0.0, 0.0, 0.0 }; \n" \
+"           Asub[row][col] = tmp;     \n" \
+"        }     \n" \
+"        if((globalCol < n_batch) && (tiledColRow < m_cols/4)) {     \n" \
+"           Bsub[col][row] = filter_data[globalCol*(m_cols/4) + tiledColRow];     \n" \
+"        }      \n" \
+"        else {     \n" \
+"           float4 tmp = { 0.0, 0.0, 0.0, 0.0 }; \n" \
+"           Bsub[col][row] = tmp;     \n" \
+"        }     \n" \
 "        barrier(CLK_LOCAL_MEM_FENCE);      \n" \
-"        if(localidx == 0) { \n" \
-"            result[row/4] = Aacc[0] + Aacc[1] + Aacc[2] + Aacc[3] + Aacc[4] + Aacc[5] + Aacc[6] + Aacc[7]+ \n" \
-"            Aacc[8] + Aacc[9] + Aacc[10] + Aacc[11] + Aacc[12] + Aacc[13] + Aacc[14] + Aacc[15]+ \n" \
-"            Aacc[16] + Aacc[17] + Aacc[18] + Aacc[19] + Aacc[20] + Aacc[21] + Aacc[22] + Aacc[23]+ \n" \
-"            Aacc[24] + Aacc[25] + Aacc[26] + Aacc[27] + Aacc[28] + Aacc[29] + Aacc[30] + Aacc[31]; \n" \
+"       \n" \
+"        for(int k = 0; k < 8; k++) { \n" \
+"          float4 valA = Asub[row][k]; \n" \
+"          acc.x += dot(valA,Bsub[k][col*4+0]); \n" \
+"          acc.y += dot(valA,Bsub[k][col*4+1]); \n" \
+"          acc.z += dot(valA,Bsub[k][col*4+2]); \n" \
+"          acc.w += dot(valA,Bsub[k][col*4+3]); \n" \
 "        } \n" \
+"        barrier(CLK_LOCAL_MEM_FENCE);      \n" \
+"    }   \n" \
+"    \n" \
+"    globalCol = (8*get_group_id(0) + col)*4;    \n" \
+"    if (bias_data) {   \n" \
+"      acc = acc + bias_data[globalCol*bias_stride/4];\n" \
 "    } \n" \
-"} \n" \
+"    if((globalCol < n_batch) && (globalRow < m_rows)) {     \n" \
+"      output_data[globalRow*((n_batch-1)/4+1) + globalCol/4] = min(max(acc, output_activation_min), output_activation_max);     \n" \
+"    }      \n" \
+"}      \n" \
 "__kernel void matrixVectorMulF4float(__global float4* result,    \n" \
 "    const __global float4* matrix,    \n" \
 "    const __global float4* vector,     \n" \
@@ -1009,61 +1020,67 @@ void initOpenCL() {
 
   clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
 
-  cl_kernel kernel_transpose = clCreateKernel(program, "transpose", &err);
-  cl_kernel kernel_conv = clCreateKernel(program, "conv", &err);
-  cl_kernel kernel_matrixVectorMul = clCreateKernel(program, "matrixVectorMul", &err);
-  size_t prefWorkGroupSize1, prefWorkGroupSize2, prefWorkGroupSize3;
-  size_t maxWorkGroupSize1, maxWorkGroupSize2, maxWorkGroupSize3;
-  clGetKernelWorkGroupInfo(kernel_transpose,
-    device_id,
-    CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE,
-    sizeof(size_t),
-    &prefWorkGroupSize1,
-    NULL);
-  clGetKernelWorkGroupInfo(kernel_conv,
-    device_id,
-    CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE,
-    sizeof(size_t),
-    &prefWorkGroupSize2,
-    NULL);
-  clGetKernelWorkGroupInfo(kernel_matrixVectorMul,
-    device_id,
-    CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE,
-    sizeof(size_t),
-    &prefWorkGroupSize3,
-    NULL);
-  //note: andoird log
-  __android_log_print(ANDROID_LOG_INFO, "Ngising", "Workgroup transpose: %d",prefWorkGroupSize1);
-  __android_log_print(ANDROID_LOG_INFO, "Ngising", "Workgroup conv: %d",prefWorkGroupSize2);
-  __android_log_print(ANDROID_LOG_INFO, "Ngising", "Workgroup matrixVectorMul: %d",prefWorkGroupSize3);
-  clGetKernelWorkGroupInfo(kernel_transpose,
-    device_id,
-    CL_KERNEL_WORK_GROUP_SIZE,
-    sizeof(size_t),
-    &maxWorkGroupSize1,
-    NULL);
-  clGetKernelWorkGroupInfo(kernel_conv,
-    device_id,
-    CL_KERNEL_WORK_GROUP_SIZE,
-    sizeof(size_t),
-    &maxWorkGroupSize2,
-    NULL);
-  clGetKernelWorkGroupInfo(kernel_matrixVectorMul,
-    device_id,
-    CL_KERNEL_WORK_GROUP_SIZE,
-    sizeof(size_t),
-    &maxWorkGroupSize3,
-    NULL);
+  cl_kernel kernel_matmulblock = clCreateKernel(program, "convmatmulblock", &err);
+  // cl_kernel kernel_conv = clCreateKernel(program, "conv", &err);
+  // cl_kernel kernel_matrixVectorMul = clCreateKernel(program, "matrixVectorMul", &err);
+
+
+  size_t wgsize;
+  clGetKernelWorkGroupInfo(kernel_matmulblock, device_id, CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &wgsize, NULL);
+  __android_log_print(ANDROID_LOG_INFO, "Ngising", "runkernelwgsizematmulblock: %d",wgsize);
+
+  // size_t prefWorkGroupSize1, prefWorkGroupSize2, prefWorkGroupSize3;
+  // size_t maxWorkGroupSize1, maxWorkGroupSize2, maxWorkGroupSize3;
+  // clGetKernelWorkGroupInfo(kernel_transpose,
+  //   device_id,
+  //   CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE,
+  //   sizeof(size_t),
+  //   &prefWorkGroupSize1,
+  //   NULL);
+  // clGetKernelWorkGroupInfo(kernel_conv,
+  //   device_id,
+  //   CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE,
+  //   sizeof(size_t),
+  //   &prefWorkGroupSize2,
+  //   NULL);
+  // clGetKernelWorkGroupInfo(kernel_matrixVectorMul,
+  //   device_id,
+  //   CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE,
+  //   sizeof(size_t),
+  //   &prefWorkGroupSize3,
+  //   NULL);
+  // //note: andoird log
+  // __android_log_print(ANDROID_LOG_INFO, "Ngising", "Workgroup transpose: %d",prefWorkGroupSize1);
+  // __android_log_print(ANDROID_LOG_INFO, "Ngising", "Workgroup conv: %d",prefWorkGroupSize2);
+  // __android_log_print(ANDROID_LOG_INFO, "Ngising", "Workgroup matrixVectorMul: %d",prefWorkGroupSize3);
+  // clGetKernelWorkGroupInfo(kernel_transpose,
+  //   device_id,
+  //   CL_KERNEL_WORK_GROUP_SIZE,
+  //   sizeof(size_t),
+  //   &maxWorkGroupSize1,
+  //   NULL);
+  // clGetKernelWorkGroupInfo(kernel_conv,
+  //   device_id,
+  //   CL_KERNEL_WORK_GROUP_SIZE,
+  //   sizeof(size_t),
+  //   &maxWorkGroupSize2,
+  //   NULL);
+  // clGetKernelWorkGroupInfo(kernel_matrixVectorMul,
+  //   device_id,
+  //   CL_KERNEL_WORK_GROUP_SIZE,
+  //   sizeof(size_t),
+  //   &maxWorkGroupSize3,
+  //   NULL);
 
   // if(d_input == NULL) {
   //   __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelmasuksekali");    
       
   // kernel = clCreateKernel(program, "convhalf", NULL);
 
-  d_conv_input = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[0]*sizeof(float), NULL, NULL);
-  d_conv_filter = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[1]*sizeof(float), NULL, NULL);
+  d_conv_input = clCreateBuffer(context_cl, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, buffsizes[0]*sizeof(float), NULL, NULL);
+  d_conv_filter = clCreateBuffer(context_cl, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, buffsizes[1]*sizeof(float), NULL, NULL);
   d_conv_bias = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[2]*sizeof(float), NULL, NULL);
-  d_conv_output = clCreateBuffer(context_cl, CL_MEM_WRITE_ONLY, buffsizes[3]*sizeof(float), NULL, NULL);
+  d_conv_output = clCreateBuffer(context_cl, CL_MEM_WRITE_ONLY | CL_MEM_ALLOC_HOST_PTR, buffsizes[3]*sizeof(float), NULL, NULL);
   d_conv_dim_sizes = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, 16*sizeof(int), NULL, NULL);
   d_conv_dim_strides = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, 16*sizeof(int), NULL, NULL);
 
@@ -1080,15 +1097,20 @@ VkPhysicalDevice physicalDevice;
 
 VkDevice device;
 VkPipeline pipelineConv;
+VkPipeline pipelineConvMatmul;
 VkPipeline pipelineMatmul;
 VkPipelineLayout pipelineLayoutMatmul;
 VkPipelineLayout pipelineLayoutConv;
+VkPipelineLayout pipelineLayoutConvMatmul;
 VkShaderModule matmulShaderModule;
 VkShaderModule convShaderModule;
+VkShaderModule convmatmulShaderModule;
 VkDescriptorSetLayout descriptorSetLayoutMatmul;
 VkDescriptorSetLayout descriptorSetLayoutConv;
 VkQueue queue; 
 uint32_t queueFamilyIndex = 0;
+
+// VkPipeline pipelineConvMatmul, VkPipelineLayout pipelineLayoutConvMatmul
 
 void createInstance() {
     VkApplicationInfo applicationInfo = {};
@@ -1267,10 +1289,10 @@ void createConvPipeline() {
     "    vec4 ifData[];  \n" \
     "};  \n" \
     "layout(binding = 1) readonly buffer bBuffer {  \n" \
-    "    float bData[];  \n" \
+    "    vec4 bData[];  \n" \
     "};  \n" \
     "layout(binding = 2) buffer oBuffer {  \n" \
-    "    float oData[];  \n" \
+    "    vec4 oData[];  \n" \
     "};  \n" \
     "layout(binding = 3) uniform UniformBufferObject {  \n" \
     "    vec4 actMinMax;  \n" \
@@ -1280,12 +1302,13 @@ void createConvPipeline() {
     "    ivec4 ifboSize;  \n" \
     "};  \n" \
     "void main() {  \n" \
-    "    int out_channel = int(gl_GlobalInvocationID.x);   \n" \
+    "    int out_channel = int(gl_GlobalInvocationID.x)*4;   \n" \
     "    int out_y = int(gl_GlobalInvocationID.y);   \n" \
     "    int out_x = int(gl_GlobalInvocationID.z);   \n" \
-    "    if((out_channel < dimSizes[1].w) && (out_x < dimSizes[3].y) && (out_y < dimSizes[3].z)) {  \n" \
+    "    int output_depth = dimSizes[1].w; \n" \
+    "    if((out_channel < output_depth) && (out_x < dimSizes[3].y) && (out_y < dimSizes[3].z)) {  \n" \
     "      for(int batch = 0; batch < dimSizes[0].w; ++batch) { \n" \
-    "        float total = 0.0;  \n" \
+    "        vec4 total = {0.0, 0.0, 0.0, 0.0};  \n" \
     "        for (int filter_y = 0; filter_y < dimSizes[1].z; ++filter_y) {  \n" \
     "          for (int filter_x = 0; filter_x < dimSizes[1].y; ++filter_x) {  \n" \
     "            for (int in_channel = 0; in_channel < dimSizes[0].x/4; ++in_channel) {  \n" \
@@ -1293,17 +1316,22 @@ void createConvPipeline() {
     "              int in_y = (out_y * stridePad.y - stridePad.w) + filter_y;  \n" \
     "              if ((in_x >= 0) && (in_x < dimSizes[0].y) && (in_y >= 0) &&  \n" \
     "                  (in_y < dimSizes[0].z)) {  \n" \
-    "                total += dot(ifData[in_channel*dimStrides[0].x + in_x*dimStrides[0].y/4 +in_y*dimStrides[0].z/4 + batch*dimStrides[0].w/4],   \n" \
-    "                        ifData[ifboSize.x/4 + in_channel*dimStrides[1].x + filter_x*dimStrides[1].y/4 + filter_y*dimStrides[1].z/4 + out_channel*dimStrides[1].w/4]);  \n" \
+    "                vec4 input_conv = ifData[in_channel*dimStrides[0].x + in_x*dimStrides[0].y/4 +in_y*dimStrides[0].z/4 + batch*dimStrides[0].w/4]; \n" \
+    "                total.x += dot(input_conv, ifData[ifboSize.x/4 + in_channel*dimStrides[1].x + filter_x*dimStrides[1].y/4 + filter_y*dimStrides[1].z/4 + out_channel*dimStrides[1].w/4]);  \n" \
+    "                if(out_channel+1 < output_depth) total.y += dot(input_conv, ifData[ifboSize.x/4 + in_channel*dimStrides[1].x + filter_x*dimStrides[1].y/4 + filter_y*dimStrides[1].z/4 + (out_channel+1)*dimStrides[1].w/4]);  \n" \
+    "                if(out_channel+2 < output_depth) total.z += dot(input_conv, ifData[ifboSize.x/4 + in_channel*dimStrides[1].x + filter_x*dimStrides[1].y/4 + filter_y*dimStrides[1].z/4 + (out_channel+2)*dimStrides[1].w/4]);  \n" \
+    "                if(out_channel+3 < output_depth) total.w += dot(input_conv, ifData[ifboSize.x/4 + in_channel*dimStrides[1].x + filter_x*dimStrides[1].y/4 + filter_y*dimStrides[1].z/4 + (out_channel+3)*dimStrides[1].w/4]);  \n" \
     "              }  \n" \
     "            }  \n" \
     "          }  \n" \
     "        }  \n" \
-    "        float bias_value = 0.0;  \n" \
     "        if (ifboSize.z > 0) {  \n" \
-    "          bias_value = bData[out_channel*dimStrides[2].x];  \n" \
+    "          total = total + bData[out_channel*dimStrides[2].x/4];  \n" \
     "        }  \n" \
-    "        oData[out_channel*dimStrides[3].x + out_x*dimStrides[3].y + out_y*dimStrides[3].z + batch*dimStrides[3].w] = min(max(total + bias_value,actMinMax.x),actMinMax.y);  \n" \
+    "        vec4 actMinMax0 = actMinMax;  \n" \
+    "        vec4 omin = {actMinMax0.x, actMinMax0.x, actMinMax0.x, actMinMax0.x}; \n" \
+    "        vec4 omax = {actMinMax0.y, actMinMax0.y, actMinMax0.y, actMinMax0.y};; \n" \
+    "        oData[out_channel*dimStrides[3].x/4 + out_x*dimStrides[3].y + out_y*dimStrides[3].z + batch*dimStrides[3].w] = min(max(total,omin),omax);  \n" \
     "      }  \n" \
     "    }  \n" \
     "}";
@@ -1406,6 +1434,121 @@ void createConvPipeline() {
         device, VK_NULL_HANDLE,
         1, &pipelineCreateInfo,
         NULL, &pipelineConv));
+}
+
+void createConvMatmulPipeline() {
+    std::string source =
+    "#version 450  \n" \
+    "#extension GL_ARB_separate_shader_objects : enable  \n" \
+    "layout(local_size_x = 8, local_size_y = 32, local_size_z = 1) in;  \n" \
+    "layout(binding = 0) readonly buffer ifBuffer {  \n" \
+    "    vec4 ifData[];  \n" \
+    "};  \n" \
+    "layout(binding = 1) readonly buffer bBuffer {  \n" \
+    "    vec4 bData[];  \n" \
+    "};  \n" \
+    "layout(binding = 2) buffer oBuffer {  \n" \
+    "    vec4 oData[];  \n" \
+    "};  \n" \
+    "layout(binding = 3) uniform UniformBufferObject {  \n" \
+    "    vec4 actMinMax;  \n" \
+    "    ivec4 stridePad;  \n" \
+    "    ivec4 dimSizes[4];  \n" \
+    "    ivec4 dimStrides[4];  \n" \
+    "    ivec4 ifboSize;  \n" \
+    "};  \n" \
+    "shared vec4 Asub[32][8];      \n" \
+	"shared vec4 Bsub[8][32];      \n" \
+    "void main() {  \n" \
+    "    int row = int(gl_LocalInvocationID.y);  \n" \
+	"    int col = int(gl_LocalInvocationID.x);  \n" \
+	"    int globalRow = 32*int(gl_WorkGroupID.y) + row;   \n" \
+	"    int globalCol = 32*int(gl_WorkGroupID.x) + row;  \n" \
+	"    int m_rows = dimSizes[0].y*dimSizes[0].z*dimSizes[0].w;  \n" \
+	"    int m_cols = dimSizes[0].x;  \n" \
+	"    int n_batch = dimSizes[1].w;  \n" \
+	"    vec4 acc = { 0.0, 0.0, 0.0, 0.0 };      \n" \
+	"    int tiledColRow = 0;     \n" \
+    "    for(int t = 0; t < ((m_cols/4-1)/8+1); t++) {      \n" \
+	"        tiledColRow = t*8 + col;       \n" \
+	"        if((globalRow < m_rows) && (tiledColRow < m_cols/4)) {     \n" \
+	"           Asub[row][col] = ifData[globalRow*(m_cols/4) + tiledColRow];     \n" \
+	"        }      \n" \
+	"        else {     \n" \
+	"           vec4 tmp = { 0.0, 0.0, 0.0, 0.0 }; \n" \
+	"           Asub[row][col] = tmp;     \n" \
+	"        }     \n" \
+	"        if((globalCol < n_batch) && (tiledColRow < m_cols/4)) {     \n" \
+	"           Bsub[col][row] = ifData[ifboSize.x/4 + globalCol*(m_cols/4) + tiledColRow];     \n" \
+	"        }      \n" \
+	"        else {     \n" \
+	"           vec4 tmp = { 0.0, 0.0, 0.0, 0.0 }; \n" \
+	"           Bsub[col][row] = tmp;     \n" \
+	"        }     \n" \
+	"        barrier();      \n" \
+	"       \n" \
+	"        for(int k = 0; k < 8; k++) { \n" \
+	"          vec4 valA = Asub[row][k]; \n" \
+	"          acc.x += dot(valA,Bsub[k][col*4+0]); \n" \
+	"          acc.y += dot(valA,Bsub[k][col*4+1]); \n" \
+	"          acc.z += dot(valA,Bsub[k][col*4+2]); \n" \
+	"          acc.w += dot(valA,Bsub[k][col*4+3]); \n" \
+	"        } \n" \
+	"        barrier();      \n" \
+	"    }   \n" \
+	"    \n" \
+	"    globalCol = (8*int(gl_WorkGroupID.x) + col)*4;    \n" \
+	"    if (ifboSize.z > 0) {   \n" \
+	"      acc = acc + bData[globalCol*dimStrides[2].x/4];\n" \
+	"    } \n" \
+	"    if((globalCol < n_batch) && (globalRow < m_rows)) {     \n" \
+	"      vec4 omin = {actMinMax.x, actMinMax.x, actMinMax.x, actMinMax.x}; \n" \
+    "      vec4 omax = {actMinMax.y, actMinMax.y, actMinMax.y, actMinMax.y};; \n" \
+	"      oData[globalRow*((n_batch-1)/4+1) + globalCol/4] = min(max(acc, omin), omax);     \n" \
+	"    }      \n" \
+    "}";
+
+    shaderc::Compiler compiler;
+    shaderc::CompileOptions options;
+
+    shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(
+      source.c_str(), source.size(), shaderc_glsl_compute_shader, "convmatmul.glsl", options);
+
+    if (module.GetCompilationStatus() !=
+        shaderc_compilation_status_success) {
+    }
+
+    std::vector<uint32_t> code(module.cbegin(), module.cend());
+
+    VkShaderModuleCreateInfo createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    createInfo.pCode = code.data();
+    createInfo.codeSize = sizeof(uint32_t)*code.size();
+
+    VK_CHECK_RESULT(vkCreateShaderModule(device, &createInfo, NULL, &convmatmulShaderModule));
+
+    VkPipelineShaderStageCreateInfo shaderStageCreateInfo = {};
+    shaderStageCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    shaderStageCreateInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+    shaderStageCreateInfo.module = convmatmulShaderModule;
+    shaderStageCreateInfo.pName = "main";
+
+    VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {};
+    pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutCreateInfo.setLayoutCount = 1;
+    pipelineLayoutCreateInfo.pSetLayouts = &descriptorSetLayoutConv; 
+    
+    VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, NULL, &pipelineLayoutConvMatmul));
+
+    VkComputePipelineCreateInfo pipelineCreateInfo = {};
+    pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    pipelineCreateInfo.stage = shaderStageCreateInfo;
+    pipelineCreateInfo.layout = pipelineLayoutConvMatmul;
+
+    VK_CHECK_RESULT(vkCreateComputePipelines(
+        device, VK_NULL_HANDLE,
+        1, &pipelineCreateInfo,
+        NULL, &pipelineConvMatmul));
 }
 
 void createMatmulPipeline() {
@@ -1660,6 +1803,8 @@ void initVulkan() {
     __android_log_print(ANDROID_LOG_INFO, "VulkanInit", "createMatmulPipeline");
     createConvPipeline();
     __android_log_print(ANDROID_LOG_INFO, "VulkanInit", "createConvPipeline");
+    createConvMatmulPipeline();
+    __android_log_print(ANDROID_LOG_INFO, "VulkanInit", "createConvMatmulPipeline");
     createConvBuffer();
     __android_log_print(ANDROID_LOG_INFO, "VulkanInit", "createConvBuffer");
 }
@@ -1670,8 +1815,8 @@ TfLiteStatus InterpreterBuilder::ParseNodes(
   TfLiteStatus status = kTfLiteOk;
   //note: andoird log
   // __android_log_print(ANDROID_LOG_INFO, "Ngising", "addnodewithparam");
-  initOpenCL();
-  // initVulkan();
+  // initOpenCL();
+  initVulkan();
   for (int i = 0; i < operators->Length(); ++i) {
     const auto* op = operators->Get(i);
     int index = op->opcode_index();
@@ -1714,7 +1859,7 @@ TfLiteStatus InterpreterBuilder::ParseNodes(
             reinterpret_cast<const char*>(op->custom_options()->data()),
             op->custom_options()->size(), nullptr, reg,
             context_cl, queueCL, program, cl_mem_arr,
-            physicalDevice, device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, 
+            physicalDevice, device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, pipelineConvMatmul, pipelineLayoutConvMatmul,
             descriptorSetLayoutConv, descriptorSetLayoutMatmul, queue, queueFamilyIndex,
             conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixB, conv_matrixC, conv_matrixSizes, conv_bufferMemory);
       } else {
@@ -1729,7 +1874,7 @@ TfLiteStatus InterpreterBuilder::ParseNodes(
             FlatBufferIntArrayToVector(op->outputs()), nullptr, 0,
             ParseOpData(op, op_type, error_reporter_), reg,
             context_cl, queueCL, program, cl_mem_arr,
-            physicalDevice, device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, 
+            physicalDevice, device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, pipelineConvMatmul, pipelineLayoutConvMatmul,
             descriptorSetLayoutConv, descriptorSetLayoutMatmul, queue, queueFamilyIndex,
             conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixB, conv_matrixC, conv_matrixSizes, conv_bufferMemory);
       }

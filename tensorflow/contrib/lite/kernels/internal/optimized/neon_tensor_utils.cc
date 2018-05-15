@@ -376,67 +376,67 @@ void OpenCLPortableMatrixBatchVectorMultiplyAccumulate(const float* matrix,
   double wall = wall1 - wall0;
   double cpu = cpu1 - cpu0;
   
-  __android_log_print(ANDROID_LOG_INFO, "Matmulruntime", "createkernel: %lf", wall);
+  // __android_log_print(ANDROID_LOG_INFO, "Matmulruntime", "createkernel: %lf", wall);
 
-  wall0 = get_wall_time();
-  cpu0  = get_cpu_time();
+  // wall0 = get_wall_time();
+  // cpu0  = get_cpu_time();
 
   // | CL_MEM_ALLOC_HOST_PTR
-  d_a = clCreateBuffer(context, CL_MEM_READ_ONLY, matrixsize, NULL, NULL);
-  d_b = clCreateBuffer(context, CL_MEM_READ_ONLY, vectorsize, NULL, NULL);
-  d_c = clCreateBuffer(context, CL_MEM_WRITE_ONLY, resultsize, NULL, NULL);
+  d_a = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, matrixsize, NULL, NULL);
+  d_b = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, vectorsize, NULL, NULL);
+  d_c = clCreateBuffer(context, CL_MEM_WRITE_ONLY | CL_MEM_ALLOC_HOST_PTR, resultsize, NULL, NULL);
 
-  wall1 = get_wall_time();
-  cpu1  = get_cpu_time();
+  // wall1 = get_wall_time();
+  // cpu1  = get_cpu_time();
 
-  wall = wall1 - wall0;
-  cpu = cpu1 - cpu0;
+  // wall = wall1 - wall0;
+  // cpu = cpu1 - cpu0;
   
-  __android_log_print(ANDROID_LOG_INFO, "Matmulruntime", "createbuffer: %lf", wall);
+  // __android_log_print(ANDROID_LOG_INFO, "Matmulruntime", "createbuffer: %lf", wall);
 
 
   wall0 = get_wall_time();
   cpu0  = get_cpu_time();
 
-  err = clEnqueueWriteBuffer(queue, d_a, CL_TRUE, 0,
-                                 matrixsize, matrix, 0, NULL, NULL);
-  err = clEnqueueWriteBuffer(queue, d_b, CL_TRUE, 0,
-                                vectorsize, vector, 0, NULL, NULL);
+  // err = clEnqueueWriteBuffer(queue, d_a, CL_TRUE, 0,
+  //                                matrixsize, matrix, 0, NULL, NULL);
+  // err = clEnqueueWriteBuffer(queue, d_b, CL_TRUE, 0,
+  //                               vectorsize, vector, 0, NULL, NULL);
 
-  // cl_float *host_a = (cl_float*)clEnqueueMapBuffer(
-  //             queue,
-  //             d_a,
-  //             CL_TRUE,
-  //             CL_MAP_WRITE,
-  //             0,
-  //             sizeof(float)*m_rows*m_cols,
-  //             0, NULL, NULL, NULL);
-  // cl_float *host_b = (cl_float*)clEnqueueMapBuffer(
-  //             queue,
-  //             d_b,
-  //             CL_TRUE,
-  //             CL_MAP_WRITE,
-  //             0,
-  //             sizeof(float)*m_cols*n_batch,
-  //             0, NULL, NULL, NULL);
+  cl_float *host_a = (cl_float*)clEnqueueMapBuffer(
+              queue,
+              d_a,
+              CL_TRUE,
+              CL_MAP_WRITE,
+              0,
+              matrixsize,
+              0, NULL, NULL, NULL);
+  cl_float *host_b = (cl_float*)clEnqueueMapBuffer(
+              queue,
+              d_b,
+              CL_TRUE,
+              CL_MAP_WRITE,
+              0,
+              vectorsize,
+              0, NULL, NULL, NULL);
 
   // clFinish(queue);
 
-  // std::memcpy(host_a, matrix, m_rows*m_cols*sizeof(float));
-  // std::memcpy(host_b, vector, m_cols*n_batch*sizeof(float));
+  std::memcpy(host_a, matrix, matrixsize);
+  std::memcpy(host_b, vector, vectorsize);
 
-  // clEnqueueUnmapMemObject(queue,d_a,(void *) host_a,0, NULL, NULL);
-  // clEnqueueUnmapMemObject(queue,d_b,(void *) host_b,0, NULL, NULL);
+  clEnqueueUnmapMemObject(queue,d_a,(void *) host_a,0, NULL, NULL);
+  clEnqueueUnmapMemObject(queue,d_b,(void *) host_b,0, NULL, NULL);
 
-  clFinish(queue);
+  // clFinish(queue);
 
-  wall1 = get_wall_time();
-  cpu1  = get_cpu_time();
+  // wall1 = get_wall_time();
+  // cpu1  = get_cpu_time();
 
-  wall = wall1 - wall0;
-  cpu = cpu1 - cpu0;
+  // wall = wall1 - wall0;
+  // cpu = cpu1 - cpu0;
   
-  __android_log_print(ANDROID_LOG_INFO, "Matmulruntime", "writebuffer: %lf", wall);
+  // __android_log_print(ANDROID_LOG_INFO, "Matmulruntime", "writebuffer: %lf", wall);
 
   err  = clSetKernelArg(kernel, 0, sizeof(cl_mem), &d_c);
   err  = clSetKernelArg(kernel, 1, sizeof(cl_mem), &d_a);
@@ -448,14 +448,44 @@ void OpenCLPortableMatrixBatchVectorMultiplyAccumulate(const float* matrix,
   const size_t local[2] = { 8, 32 };
   const size_t global[2] = { (size_t) (((m_rows/4-1)/8+1)*8), 32 };
 
-  wall0 = get_wall_time();
-  cpu0  = get_cpu_time();
+  // wall0 = get_wall_time();
+  // cpu0  = get_cpu_time();
 
   err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global, local, 0, NULL, NULL);
 
-  clFinish(queue);
+  // clFinish(queue);
 
-  __android_log_print(ANDROID_LOG_INFO, "Matmulruntime", "runkernelMatmulerror1: %d", err);
+  // __android_log_print(ANDROID_LOG_INFO, "Matmulruntime", "runkernelMatmulerror1: %d", err);
+
+  // wall1 = get_wall_time();
+  // cpu1  = get_cpu_time();
+
+  // wall = wall1 - wall0;
+  // cpu = cpu1 - cpu0;
+  
+  // __android_log_print(ANDROID_LOG_INFO, "Matmulruntime", "runkernelOclMatmul: %lf", wall);
+
+  // wall0 = get_wall_time();
+  // cpu0  = get_cpu_time();
+
+  // clEnqueueReadBuffer(queue, d_c, CL_TRUE, 0, resultsize, result, 0, NULL, NULL );
+
+  cl_float *host_c = (cl_float*)clEnqueueMapBuffer(
+              queue,
+              d_c,
+              CL_TRUE,
+              CL_MAP_READ,
+              0,
+              resultsize,
+              0, NULL, NULL, NULL);
+
+  // clFinish(queue);
+
+  std::memcpy(result, host_c, resultsize);
+
+  clEnqueueUnmapMemObject(queue,d_c,(void *) host_c,0, NULL, NULL);
+
+  // clFinish(queue);
 
   wall1 = get_wall_time();
   cpu1  = get_cpu_time();
@@ -463,22 +493,9 @@ void OpenCLPortableMatrixBatchVectorMultiplyAccumulate(const float* matrix,
   wall = wall1 - wall0;
   cpu = cpu1 - cpu0;
   
-  __android_log_print(ANDROID_LOG_INFO, "Matmulruntime", "runkernelOclMatmul: %lf", wall);
+  // __android_log_print(ANDROID_LOG_INFO, "Matmulruntime", "readbuffer: %lf", wall);
 
-  wall0 = get_wall_time();
-  cpu0  = get_cpu_time();
-
-  clEnqueueReadBuffer(queue, d_c, CL_TRUE, 0, resultsize, result, 0, NULL, NULL );
-
-  clFinish(queue);
-
-  wall1 = get_wall_time();
-  cpu1  = get_cpu_time();
-
-  wall = wall1 - wall0;
-  cpu = cpu1 - cpu0;
-  
-  __android_log_print(ANDROID_LOG_INFO, "Matmulruntime", "readbuffer: %lf", wall);
+  __android_log_print(ANDROID_LOG_INFO, "Matmulruntime", "runkernelOclTotal: %lf", wall);
 
   wall0 = get_wall_time();
   cpu0  = get_cpu_time();
@@ -503,9 +520,9 @@ void PortableMatrixBatchVectorMultiplyAccumulate(const float* matrix,
                                                  const float* vector,
                                                  int n_batch, float* result,
                                                  int result_stride) {
-  // // Start Timers
-  // double wall0 = get_wall_time();
-  // double cpu0  = get_cpu_time();
+  // Start Timers
+  double wall0 = get_wall_time();
+  double cpu0  = get_cpu_time();
   // vector per kolom
   // matrix per baris
   // result per kolom
@@ -521,15 +538,15 @@ void PortableMatrixBatchVectorMultiplyAccumulate(const float* matrix,
     }
   }
 
-  // // Stop timers
-  // double wall1 = get_wall_time();
-  // double cpu1  = get_cpu_time();
+  // Stop timers
+  double wall1 = get_wall_time();
+  double cpu1  = get_cpu_time();
 
-  // double wall = wall1 - wall0;
-  // double cpu = cpu1 - cpu0;
+  double wall = wall1 - wall0;
+  double cpu = cpu1 - cpu0;
 
-  // // note: andoird log
-  // __android_log_print(ANDROID_LOG_INFO, "Portablematmul", "runkernel: %lf", wall);
+  // note: andoird log
+  __android_log_print(ANDROID_LOG_INFO, "Matmulruntime", "runkernelPortable: %lf", wall);
 }
 
 namespace tflite {
@@ -635,7 +652,7 @@ void NeonMatrixBatchVectorMultiplyAccumulate(const float* matrix, int m_rows,
   double cpu = cpu1 - cpu0;
 
   // note: andoird log
-  __android_log_print(ANDROID_LOG_INFO, "Matmulruntime", "Walltime: %lf", wall);
+  __android_log_print(ANDROID_LOG_INFO, "Matmulruntime", "runkernelNEON: %lf", wall);
 }
 
 void TransposeFloatTensor(const float* input, int rows, int cols, float* output) {
@@ -707,6 +724,8 @@ public:
         matB = (float*) matB0;
         matC = matC0;
 
+        double totalwall = 0.0;
+
         // // Start Timers
         double wall0 = get_wall_time();
         double cpu0  = get_cpu_time();
@@ -736,14 +755,23 @@ public:
         // cpu = cpu1 - cpu0;
         // __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createDevice: %lf", wall);
         
+        // wall0 = get_wall_time();
+        // cpu0  = get_cpu_time();
+        createBuffer();
+        // wall1 = get_wall_time();
+        // cpu1  = get_cpu_time();
+        // wall = wall1 - wall0;
+        // cpu = cpu1 - cpu0;
+        // __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createBuffer: %lf", wall);
+
         wall0 = get_wall_time();
         cpu0  = get_cpu_time();
-        createBuffer();
+        copyInputData();
         wall1 = get_wall_time();
         cpu1  = get_cpu_time();
-        wall = wall1 - wall0;
-        cpu = cpu1 - cpu0;
-        __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createBuffer: %lf", wall);
+        totalwall += wall1 - wall0;
+        // cpu = cpu1 - cpu0;
+        // __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createBuffer: %lf", wall);
         
         // wall0 = get_wall_time();
         // cpu0  = get_cpu_time();
@@ -754,14 +782,14 @@ public:
         // cpu = cpu1 - cpu0;
         // __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createDescriptorSetLayout: %lf", wall);
         
-        wall0 = get_wall_time();
-        cpu0  = get_cpu_time();
+        // wall0 = get_wall_time();
+        // cpu0  = get_cpu_time();
         createDescriptorSet();
-        wall1 = get_wall_time();
-        cpu1  = get_cpu_time();
-        wall = wall1 - wall0;
-        cpu = cpu1 - cpu0;
-        __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createDescriptorSet: %lf", wall);
+        // wall1 = get_wall_time();
+        // cpu1  = get_cpu_time();
+        // wall = wall1 - wall0;
+        // cpu = cpu1 - cpu0;
+        // __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createDescriptorSet: %lf", wall);
         
         // wall0 = get_wall_time();
         // cpu0  = get_cpu_time();
@@ -772,41 +800,51 @@ public:
         // cpu = cpu1 - cpu0;
         // __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createComputePipeline: %lf", wall);
         
+        // wall0 = get_wall_time();
+        // cpu0  = get_cpu_time();
+        createCommandBuffer();
+        // wall1 = get_wall_time();
+        // cpu1  = get_cpu_time();
+        // wall = wall1 - wall0;
+        // cpu = cpu1 - cpu0;
+        // __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createCommandBuffer: %lf", wall);
+
         wall0 = get_wall_time();
         cpu0  = get_cpu_time();
-        createCommandBuffer();
+        beginCommandBuffer();
         wall1 = get_wall_time();
         cpu1  = get_cpu_time();
-        wall = wall1 - wall0;
-        cpu = cpu1 - cpu0;
-        __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createCommandBuffer: %lf", wall);
+        totalwall += wall1 - wall0;
+        // cpu = cpu1 - cpu0;
+        // __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "createCommandBuffer: %lf", wall);
         
         wall0 = get_wall_time();
         cpu0  = get_cpu_time();
         runCommandBuffer();
         wall1 = get_wall_time();
         cpu1  = get_cpu_time();
-        wall = wall1 - wall0;
-        cpu = cpu1 - cpu0;
-        __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "runCommandBuffer: %lf", wall);
+        totalwall += wall1 - wall0;
+        // cpu = cpu1 - cpu0;
+        // __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "runCommandBuffer: %lf", wall);
         
         wall0 = get_wall_time();
         cpu0  = get_cpu_time();
         getresult();
         wall1 = get_wall_time();
         cpu1  = get_cpu_time();
-        wall = wall1 - wall0;
-        cpu = cpu1 - cpu0;
-        __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "getResult: %lf", wall);
+        totalwall += wall1 - wall0;
+        // cpu = cpu1 - cpu0;
+        // __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "getResult: %lf", wall);
+        __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "runkernelTotal: %lf", totalwall);
         
-        wall0 = get_wall_time();
-        cpu0  = get_cpu_time();
+        // wall0 = get_wall_time();
+        // cpu0  = get_cpu_time();
         cleanup();
-        wall1 = get_wall_time();
-        cpu1  = get_cpu_time();
-        wall = wall1 - wall0;
-        cpu = cpu1 - cpu0;
-        __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "cleanup: %lf", wall);
+        // wall1 = get_wall_time();
+        // cpu1  = get_cpu_time();
+        // wall = wall1 - wall0;
+        // cpu = cpu1 - cpu0;
+        // __android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "cleanup: %lf", wall);
     }
 
     // void createInstance() {
@@ -960,6 +998,14 @@ public:
 
         VK_CHECK_RESULT(vkAllocateMemory(device, &allocateInfo, NULL, &bufferMemory));
 
+        VK_CHECK_RESULT(vkBindBufferMemory(device, matrixA, bufferMemory, 0));
+        VK_CHECK_RESULT(vkBindBufferMemory(device, matrixB, bufferMemory, matrixASize));
+        VK_CHECK_RESULT(vkBindBufferMemory(device, matrixC, bufferMemory, matrixASize+matrixBSize));
+        VK_CHECK_RESULT(vkBindBufferMemory(device, matrixSizes, bufferMemory, matrixASize+matrixBSize+matrixCSize));
+      }
+
+      void copyInputData() {
+
         float* matBuffertmp;
         VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, matrixASize+matrixBSize+matrixCSize, 0, (void **) &matBuffertmp));
         // VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, matrixASize+matrixBSize+matrixCSize+matrixSizesSize, 0, (void **) &matBuffertmp));
@@ -989,11 +1035,6 @@ public:
         matSizetmp[3] = 0;
 
         vkUnmapMemory(device, bufferMemory);
-
-        VK_CHECK_RESULT(vkBindBufferMemory(device, matrixA, bufferMemory, 0));
-        VK_CHECK_RESULT(vkBindBufferMemory(device, matrixB, bufferMemory, matrixASize));
-        VK_CHECK_RESULT(vkBindBufferMemory(device, matrixC, bufferMemory, matrixASize+matrixBSize));
-        VK_CHECK_RESULT(vkBindBufferMemory(device, matrixSizes, bufferMemory, matrixASize+matrixBSize+matrixCSize));
     }
 
     // void createDescriptorSetLayout() {
@@ -1182,7 +1223,9 @@ public:
         commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
         commandBufferAllocateInfo.commandBufferCount = 1; // allocate a single command buffer. 
         VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, &commandBuffer)); // allocate command buffer.
+    }
 
+    void beginCommandBuffer() {
         VkCommandBufferBeginInfo beginInfo = {};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT; // the buffer is only submitted and used once in this application.
@@ -1207,20 +1250,20 @@ public:
         submitInfo.pCommandBuffers = &commandBuffer; // the command buffer to submit.
 
         // Start Timers
-        double wall0 = get_wall_time();
-        double cpu0  = get_cpu_time();
+        // double wall0 = get_wall_time();
+        // double cpu0  = get_cpu_time();
 
         VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, 0));
         VK_CHECK_RESULT(vkQueueWaitIdle(queue));
 
         // Stop timers
-        double wall1 = get_wall_time();
-        double cpu1  = get_cpu_time();
+        // double wall1 = get_wall_time();
+        // double cpu1  = get_cpu_time();
 
-        double wall = wall1 - wall0;
-        double cpu = cpu1 - cpu0;
+        // double wall = wall1 - wall0;
+        // double cpu = cpu1 - cpu0;
 
-        __android_log_print(ANDROID_LOG_INFO, "MatmulHalfResult", "runkernelVMatmul: %lf", wall);
+        // __android_log_print(ANDROID_LOG_INFO, "MatmulHalfResult", "runkernelVMatmul: %lf", wall);
     }
 
     void getresult() {
@@ -1230,9 +1273,9 @@ public:
         // float sumC = 0.0;
         for (int k = 0; k < M; k++) {
           matC[k] = matCtmp[k];
-          if(k < 100) {
-              __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "Matmul %d: %lf", k, matCtmp[k]);
-          }
+          // if(k < 100) {
+          //     __android_log_print(ANDROID_LOG_INFO, "VulkanTest", "Matmul %d: %lf", k, matCtmp[k]);
+          // }
         }
 
         // std::memcpy(matC, matCtmp, matrixCSize);
@@ -1456,18 +1499,18 @@ void NeonMatrixBatchVectorMultiplyAccumulateOpenCL(const float* matrix, int m_ro
 
 // PortableMatrixBatchVectorMultiplyAccumulate(matrix,m_rows,m_cols,vector,n_batch,result,1);
 
-// m_cols = 2048;
-// m_rows = 1008;
-// float* matA = (float*) malloc(m_cols*m_rows*sizeof(float));
-// float* matB = (float*) malloc(m_cols*sizeof(float));
-// float* matC = (float*) malloc(m_rows*sizeof(float));
+m_cols = 8192;
+m_rows = 8192;
+float* matA = (float*) malloc(m_cols*m_rows*sizeof(float));
+float* matB = (float*) malloc(m_cols*sizeof(float));
+float* matC = (float*) malloc(m_rows*sizeof(float));
 
-// for(int i = 0; i < m_cols*m_rows; i++) {
-//   matA[i] = 1.234567;
-// }
-// for(int i = 0; i < m_cols; i++) {
-//   matB[i] = 1.234567;
-// }
+for(int i = 0; i < m_cols*m_rows; i++) {
+  matA[i] = 1;
+}
+for(int i = 0; i < m_cols; i++) {
+  matB[i] = 1;
+}
 
 // // Start Timers
 // double wall0 = get_wall_time();
@@ -1604,7 +1647,184 @@ void NeonMatrixBatchVectorMultiplyAccumulateOpenCL(const float* matrix, int m_ro
 // double wall0 = get_wall_time();
 // double cpu0  = get_cpu_time();
 
-OpenCLPortableMatrixBatchVectorMultiplyAccumulate(matrix,m_rows,m_cols,vector,n_batch,result,1, context_cl, queue, program);
+// m_cols = 2048;
+// m_rows = 1008;
+
+// OpenCLPortableMatrixBatchVectorMultiplyAccumulate(matrix,m_rows,m_cols,vector,n_batch,result,1, context_cl, queue, program);
+
+// m_cols = 32;
+// m_rows = 32;
+// __android_log_print(ANDROID_LOG_INFO, "MatmulResult", "runkernel32x32");
+// // NeonMatrixBatchVectorMultiplyAccumulate(matA,m_rows,m_cols,matB,n_batch,matC,1);
+// // OpenCLPortableMatrixBatchVectorMultiplyAccumulate(matA,m_rows,m_cols,matB,n_batch,matC,1, context_cl, queue, program);
+// vulkanTest(matA, matB, matC, m_rows, m_cols, n_batch,
+//   physicalDevice, device, pipelineMatmul, pipelineLayoutMatmul, 
+//   descriptorSetLayoutMatmul, queueV, queueFamilyIndex);
+// // double wall0 = get_wall_time();
+// // double cpu0  = get_cpu_time();
+// // PortableMatrixBatchVectorMultiplyAccumulate(matA,m_rows,m_cols,matB,n_batch,matC,1);
+// // double wall1 = get_wall_time();
+// // double cpu1  = get_cpu_time();
+// // double wall = wall1 - wall0;
+// // double cpu = cpu1 - cpu0;
+// // __android_log_print(ANDROID_LOG_INFO, "MatmulResult", "runkernelProtable: %lf", wall);
+
+// sleep(2);
+
+// m_cols = 64;
+// m_rows = 64;
+// __android_log_print(ANDROID_LOG_INFO, "MatmulResult", "runkernel64x64");
+// // NeonMatrixBatchVectorMultiplyAccumulate(matA,m_rows,m_cols,matB,n_batch,matC,1);
+// // OpenCLPortableMatrixBatchVectorMultiplyAccumulate(matA,m_rows,m_cols,matB,n_batch,matC,1, context_cl, queue, program);
+// vulkanTest(matA, matB, matC, m_rows, m_cols, n_batch,
+//   physicalDevice, device, pipelineMatmul, pipelineLayoutMatmul, 
+//   descriptorSetLayoutMatmul, queueV, queueFamilyIndex);
+// // wall0 = get_wall_time();
+// // cpu0  = get_cpu_time();
+// // PortableMatrixBatchVectorMultiplyAccumulate(matA,m_rows,m_cols,matB,n_batch,matC,1);
+// // wall1 = get_wall_time();
+// // cpu1  = get_cpu_time();
+// // wall = wall1 - wall0;
+// // cpu = cpu1 - cpu0;
+// // __android_log_print(ANDROID_LOG_INFO, "MatmulResult", "runkernelProtable: %lf", wall);
+
+// sleep(2);
+
+m_cols = 128;
+m_rows = 128;
+__android_log_print(ANDROID_LOG_INFO, "MatmulResult", "runkernel128x128");
+// NeonMatrixBatchVectorMultiplyAccumulate(matA,m_rows,m_cols,matB,n_batch,matC,1);
+// OpenCLPortableMatrixBatchVectorMultiplyAccumulate(matA,m_rows,m_cols,matB,n_batch,matC,1, context_cl, queue, program);
+vulkanTest(matA, matB, matC, m_rows, m_cols, n_batch,
+  physicalDevice, device, pipelineMatmul, pipelineLayoutMatmul, 
+  descriptorSetLayoutMatmul, queueV, queueFamilyIndex);
+// wall0 = get_wall_time();
+// cpu0  = get_cpu_time();
+// PortableMatrixBatchVectorMultiplyAccumulate(matA,m_rows,m_cols,matB,n_batch,matC,1);
+// wall1 = get_wall_time();
+// cpu1  = get_cpu_time();
+// wall = wall1 - wall0;
+// cpu = cpu1 - cpu0;
+// __android_log_print(ANDROID_LOG_INFO, "MatmulResult", "runkernelProtable: %lf", wall);
+
+sleep(2);
+
+m_cols = 256;
+m_rows = 256;
+__android_log_print(ANDROID_LOG_INFO, "MatmulResult", "runkernel256x256");
+// NeonMatrixBatchVectorMultiplyAccumulate(matA,m_rows,m_cols,matB,n_batch,matC,1);
+// OpenCLPortableMatrixBatchVectorMultiplyAccumulate(matA,m_rows,m_cols,matB,n_batch,matC,1, context_cl, queue, program);
+vulkanTest(matA, matB, matC, m_rows, m_cols, n_batch,
+  physicalDevice, device, pipelineMatmul, pipelineLayoutMatmul, 
+  descriptorSetLayoutMatmul, queueV, queueFamilyIndex);
+// wall0 = get_wall_time();
+// cpu0  = get_cpu_time();
+// PortableMatrixBatchVectorMultiplyAccumulate(matA,m_rows,m_cols,matB,n_batch,matC,1);
+// wall1 = get_wall_time();
+// cpu1  = get_cpu_time();
+// wall = wall1 - wall0;
+// cpu = cpu1 - cpu0;
+// __android_log_print(ANDROID_LOG_INFO, "MatmulResult", "runkernelProtable: %lf", wall);
+sleep(2);
+
+m_cols = 512;
+m_rows = 512;
+__android_log_print(ANDROID_LOG_INFO, "MatmulResult", "runkernel512x512");
+// NeonMatrixBatchVectorMultiplyAccumulate(matA,m_rows,m_cols,matB,n_batch,matC,1);
+// OpenCLPortableMatrixBatchVectorMultiplyAccumulate(matA,m_rows,m_cols,matB,n_batch,matC,1, context_cl, queue, program);
+vulkanTest(matA, matB, matC, m_rows, m_cols, n_batch,
+  physicalDevice, device, pipelineMatmul, pipelineLayoutMatmul, 
+  descriptorSetLayoutMatmul, queueV, queueFamilyIndex);
+// wall0 = get_wall_time();
+// cpu0  = get_cpu_time();
+// PortableMatrixBatchVectorMultiplyAccumulate(matA,m_rows,m_cols,matB,n_batch,matC,1);
+// wall1 = get_wall_time();
+// cpu1  = get_cpu_time();
+// wall = wall1 - wall0;
+// cpu = cpu1 - cpu0;
+// __android_log_print(ANDROID_LOG_INFO, "MatmulResult", "runkernelProtable: %lf", wall);
+
+sleep(2);
+
+m_cols = 1024;
+m_rows = 1024;
+__android_log_print(ANDROID_LOG_INFO, "MatmulResult", "runkernel1024x1024");
+// NeonMatrixBatchVectorMultiplyAccumulate(matA,m_rows,m_cols,matB,n_batch,matC,1);
+// OpenCLPortableMatrixBatchVectorMultiplyAccumulate(matA,m_rows,m_cols,matB,n_batch,matC,1, context_cl, queue, program);
+vulkanTest(matA, matB, matC, m_rows, m_cols, n_batch,
+  physicalDevice, device, pipelineMatmul, pipelineLayoutMatmul, 
+  descriptorSetLayoutMatmul, queueV, queueFamilyIndex);
+// wall0 = get_wall_time();
+// cpu0  = get_cpu_time();
+// PortableMatrixBatchVectorMultiplyAccumulate(matA,m_rows,m_cols,matB,n_batch,matC,1);
+// wall1 = get_wall_time();
+// cpu1  = get_cpu_time();
+// wall = wall1 - wall0;
+// cpu = cpu1 - cpu0;
+// __android_log_print(ANDROID_LOG_INFO, "MatmulResult", "runkernelProtable: %lf", wall);
+
+sleep(2);
+
+m_cols = 2048;
+m_rows = 2048;
+__android_log_print(ANDROID_LOG_INFO, "MatmulResult", "runkernel2048x2048");
+// NeonMatrixBatchVectorMultiplyAccumulate(matA,m_rows,m_cols,matB,n_batch,matC,1);
+// OpenCLPortableMatrixBatchVectorMultiplyAccumulate(matA,m_rows,m_cols,matB,n_batch,matC,1, context_cl, queue, program);
+vulkanTest(matA, matB, matC, m_rows, m_cols, n_batch,
+  physicalDevice, device, pipelineMatmul, pipelineLayoutMatmul, 
+  descriptorSetLayoutMatmul, queueV, queueFamilyIndex);
+// wall0 = get_wall_time();
+// cpu0  = get_cpu_time();
+// PortableMatrixBatchVectorMultiplyAccumulate(matA,m_rows,m_cols,matB,n_batch,matC,1);
+// wall1 = get_wall_time();
+// cpu1  = get_cpu_time();
+// wall = wall1 - wall0;
+// cpu = cpu1 - cpu0;
+// __android_log_print(ANDROID_LOG_INFO, "MatmulResult", "runkernelProtable: %lf", wall);
+
+sleep(2);
+
+m_cols = 4096;
+m_rows = 4096;
+__android_log_print(ANDROID_LOG_INFO, "MatmulResult", "runkernel4096x4096");
+// NeonMatrixBatchVectorMultiplyAccumulate(matA,m_rows,m_cols,matB,n_batch,matC,1);
+// OpenCLPortableMatrixBatchVectorMultiplyAccumulate(matA,m_rows,m_cols,matB,n_batch,matC,1, context_cl, queue, program);
+vulkanTest(matA, matB, matC, m_rows, m_cols, n_batch,
+  physicalDevice, device, pipelineMatmul, pipelineLayoutMatmul, 
+  descriptorSetLayoutMatmul, queueV, queueFamilyIndex);
+// wall0 = get_wall_time();
+// cpu0  = get_cpu_time();
+// PortableMatrixBatchVectorMultiplyAccumulate(matA,m_rows,m_cols,matB,n_batch,matC,1);
+// wall1 = get_wall_time();
+// cpu1  = get_cpu_time();
+// wall = wall1 - wall0;
+// cpu = cpu1 - cpu0;
+// __android_log_print(ANDROID_LOG_INFO, "MatmulResult", "runkernelProtable: %lf", wall);
+
+sleep(2);
+
+m_cols = 8192;
+m_rows = 8192;
+__android_log_print(ANDROID_LOG_INFO, "MatmulResult", "runkernel8192x8192");
+// NeonMatrixBatchVectorMultiplyAccumulate(matA,m_rows,m_cols,matB,n_batch,matC,1);
+// OpenCLPortableMatrixBatchVectorMultiplyAccumulate(matA,m_rows,m_cols,matB,n_batch,matC,1, context_cl, queue, program);
+vulkanTest(matA, matB, matC, m_rows, m_cols, n_batch,
+  physicalDevice, device, pipelineMatmul, pipelineLayoutMatmul, 
+  descriptorSetLayoutMatmul, queueV, queueFamilyIndex);
+// wall0 = get_wall_time();
+// cpu0  = get_cpu_time();
+// PortableMatrixBatchVectorMultiplyAccumulate(matA,m_rows,m_cols,matB,n_batch,matC,1);
+// wall1 = get_wall_time();
+// cpu1  = get_cpu_time();
+// wall = wall1 - wall0;
+// cpu = cpu1 - cpu0;
+// __android_log_print(ANDROID_LOG_INFO, "MatmulResult", "runkernelProtable: %lf", wall);
+
+sleep(2);
+
+free(matA);
+free(matB);
+free(matC);
 
 // vulkanTest(matrix, vector, result, m_rows, m_cols, n_batch,
 //   physicalDevice, device, pipelineMatmul, pipelineLayoutMatmul, 

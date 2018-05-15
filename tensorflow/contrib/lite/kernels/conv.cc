@@ -118,13 +118,15 @@ cl_mem cl_mem_arr_global[6];
 // cl_mem d_conv_output_global = NULL;
 // cl_mem d_conv_dim_sizes_global = NULL;
 // cl_mem d_conv_dim_strides_global = NULL;
-
+ 
 VkPhysicalDevice physicalDevice_global = NULL;
 VkDevice device_global = NULL;
 VkPipeline pipelineConv_global = NULL;
 VkPipeline pipelineMatmul_global = NULL;
+VkPipeline pipelineConvMatmul_global = NULL;
 VkPipelineLayout pipelineLayoutMatmul_global = NULL;
 VkPipelineLayout pipelineLayoutConv_global = NULL;
+VkPipelineLayout pipelineLayoutConvMatmul_global = NULL;
 VkDescriptorSetLayout descriptorSetLayoutMatmul_global = NULL;
 VkDescriptorSetLayout descriptorSetLayoutConv_global = NULL;
 VkQueue queueV_global = NULL; 
@@ -241,7 +243,7 @@ void* Init(TfLiteContext* context, const char* buffer, size_t length) {
 
 void* InitOpenCL(TfLiteContext* context, const char* buffer, size_t length,
   cl_context context_cl, cl_command_queue queue, cl_program program, cl_mem cl_mem_arr[6],
-  VkPhysicalDevice physicalDevice, VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, 
+  VkPhysicalDevice physicalDevice, VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, VkPipeline pipelineConvMatmul, VkPipelineLayout pipelineLayoutConvMatmul, 
     VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex,
     VkCommandPool conv_commandPool, VkCommandBuffer conv_commandBuffer, VkBuffer conv_matrixA, VkBuffer conv_matrixB, VkBuffer conv_matrixC, VkBuffer conv_matrixSizes, VkDeviceMemory conv_bufferMemory) {
   // This is a builtin op, so we don't use the contents in 'buffer', if any.
@@ -272,6 +274,8 @@ void* InitOpenCL(TfLiteContext* context, const char* buffer, size_t length,
   pipelineLayoutConv_global = pipelineLayoutConv;
   descriptorSetLayoutMatmul_global = descriptorSetLayoutMatmul;
   descriptorSetLayoutConv_global = descriptorSetLayoutConv;
+  pipelineConvMatmul_global = pipelineConvMatmul;
+  pipelineLayoutConvMatmul_global = pipelineLayoutConvMatmul;
   queueV_global = queueV; 
   queueFamilyIndex_global = queueFamilyIndex;
   conv_commandPool_global = conv_commandPool;
@@ -685,26 +689,26 @@ void EvalFloat(TfLiteContext* context, TfLiteNode* node,
     }
     //note: andoird log
     // // __android_log_print(ANDROID_LOG_INFO, "Convcc", "multithread conv");
-    // multithreaded_ops::Conv(
-    //     GetTensorData<float>(input), GetTensorDims(input), filter_data,
-    //     GetTensorDims(filter), GetTensorData<float>(bias), GetTensorDims(bias),
-    //     params->stride_width, params->stride_height, data->padding.width,
-    //     data->padding.height, params->padding, output_activation_min,
-    //     output_activation_max, GetTensorData<float>(output),
-    //     GetTensorDims(output), GetTensorData<float>(im2col),
-    //     GetTensorDims(im2col));
-    multithreaded_ops::ConvOpenCL(
-        GetTensorData<float>(input), GetTensorDims(input), GetTensorData<float>(filter),
+    multithreaded_ops::Conv(
+        GetTensorData<float>(input), GetTensorDims(input), filter_data,
         GetTensorDims(filter), GetTensorData<float>(bias), GetTensorDims(bias),
         params->stride_width, params->stride_height, data->padding.width,
         data->padding.height, params->padding, output_activation_min,
         output_activation_max, GetTensorData<float>(output),
         GetTensorDims(output), GetTensorData<float>(im2col),
-        GetTensorDims(im2col),
-        context_cl_global, queue_global, program_global, cl_mem_arr_global, buffsizes,
-        physicalDevice_global, device_global, pipelineConv_global, pipelineMatmul_global, pipelineLayoutConv_global, 
-        pipelineLayoutMatmul_global, descriptorSetLayoutConv_global, descriptorSetLayoutMatmul_global, queueV_global, queueFamilyIndex_global,
-        conv_commandPool_global, conv_commandBuffer_global, conv_matrixA_global, conv_matrixB_global, conv_matrixC_global, conv_matrixSizes_global, conv_bufferMemory_global);
+        GetTensorDims(im2col));
+    // multithreaded_ops::ConvOpenCL(
+    //     GetTensorData<float>(input), GetTensorDims(input), GetTensorData<float>(filter),
+    //     GetTensorDims(filter), GetTensorData<float>(bias), GetTensorDims(bias),
+    //     params->stride_width, params->stride_height, data->padding.width,
+    //     data->padding.height, params->padding, output_activation_min,
+    //     output_activation_max, GetTensorData<float>(output),
+    //     GetTensorDims(output), GetTensorData<float>(im2col),
+    //     GetTensorDims(im2col),
+    //     context_cl_global, queue_global, program_global, cl_mem_arr_global, buffsizes,
+    //     physicalDevice_global, device_global, pipelineConv_global, pipelineMatmul_global, pipelineLayoutConv_global, 
+    //     pipelineLayoutMatmul_global, pipelineConvMatmul_global, pipelineLayoutConvMatmul_global, descriptorSetLayoutConv_global, descriptorSetLayoutMatmul_global, queueV_global, queueFamilyIndex_global,
+    //     conv_commandPool_global, conv_commandBuffer_global, conv_matrixA_global, conv_matrixB_global, conv_matrixC_global, conv_matrixSizes_global, conv_bufferMemory_global);
     
   }
 }
