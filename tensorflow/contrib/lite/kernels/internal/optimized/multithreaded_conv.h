@@ -70,6 +70,8 @@ limitations under the License.
 #include "tensorflow/contrib/lite/kernels/internal/optimized/optimized_ops.h"
 #include "tensorflow/contrib/lite/kernels/internal/types.h"
 
+#define kFloatWeightsPerNeonLane 4
+
 #define VK_CHECK_RESULT(f)                                        \
 {                                                   \
     VkResult res = (f);                                         \
@@ -147,6 +149,8 @@ using half_float::half_cast;
 // "\n";
 
 
+
+
 class EigenThreadPoolWrapper : public Eigen::ThreadPoolInterface {
  public:
   explicit EigenThreadPoolWrapper(Eigen::ThreadPool* pool) : pool_(pool) {}
@@ -207,6 +211,19 @@ struct MatMulConvFunctor {
   }
 };
 
+inline double get_wall_time(){
+    struct timeval time;
+    if (gettimeofday(&time,NULL)){
+        //  Handle error
+        return 0;
+    }
+    return (double)time.tv_sec + (double)time.tv_usec * .000001;
+}
+
+inline double get_cpu_time(){
+    return (double)clock() / CLOCKS_PER_SEC;
+}
+
 template <class T>
 class EigenTensorConvFunctor {
  private:
@@ -255,8 +272,23 @@ class EigenTensorConvFunctor {
       ConstEigenMatrix filter(filter_data, input_depth, filter_count);
       //note: andoird log
       // __android_log_print(ANDROID_LOG_INFO, "multithread_conv", "1x1 kernel");
+
+      //  // Start Timers
+      // double wall0 = get_wall_time();
+      // double cpu0  = get_cpu_time();
+
       MatMulConvFunctor<Eigen::ThreadPoolDevice, T>()(device, output, input,
                                                       filter, dim_pair);
+      //    // Stop timers
+      // double wall1 = get_wall_time();
+      // double cpu1  = get_cpu_time();
+
+      // double wall = wall1 - wall0;
+      // double cpu = cpu1 - cpu0;
+
+      // // note: andoird log
+      // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelMultithreadConv1x1: %lf", wall);
+
     } else if (filter_height == input_height && filter_width == input_width &&
                pad_width == 0 && pad_height == 0) {
       // If the input data and filter have the same height/width,
@@ -288,18 +320,7 @@ class EigenTensorConvFunctor {
   }
 };
 
-inline double get_wall_time(){
-    struct timeval time;
-    if (gettimeofday(&time,NULL)){
-        //  Handle error
-        return 0;
-    }
-    return (double)time.tv_sec + (double)time.tv_usec * .000001;
-}
 
-inline double get_cpu_time(){
-    return (double)clock() / CLOCKS_PER_SEC;
-}
 
 // static cl_mem d_all = NULL;
 static cl_kernel kernellocalall = NULL;
@@ -1052,7 +1073,7 @@ inline void OpenCLConv(const float* input_data, int input_size,
           cl_context context, cl_command_queue queue, cl_program program, cl_mem cl_mem_arr[6]) {
   cl_mem d_input = cl_mem_arr[0];
   cl_mem d_filter = cl_mem_arr[1];
-  cl_mem d_bias = cl_mem_arr[2];
+  // cl_mem d_bias = cl_mem_arr[2];
   cl_mem d_output = cl_mem_arr[3];
   cl_mem d_dim_sizes = cl_mem_arr[4];
   cl_mem d_dim_strides = cl_mem_arr[5];
@@ -1061,11 +1082,11 @@ inline void OpenCLConv(const float* input_data, int input_size,
   cl_event event_runkernel;
   cl_event event_mapinput;
   cl_event event_mapfilter;
-  cl_event event_mapbias;
+  // cl_event event_mapbias;
   cl_event event_mapoutput;
   cl_event event_unmapinput;
   cl_event event_unmapfilter;
-  cl_event event_unmapbias;
+  // cl_event event_unmapbias;
   cl_event event_unmapoutput;
   cl_event event_writedimsizes;
   cl_event event_writedimstrides;
@@ -1139,11 +1160,11 @@ inline void OpenCLConv(const float* input_data, int input_size,
   clEnqueueUnmapMemObject(queue,d_filter,(void *) filterfloat,0, NULL, &event_unmapfilter);
 
   // // Stop timers
-    double wall11 = get_wall_time();
-    double cpu11  = get_cpu_time();
+    // double wall11 = get_wall_time();
+    // double cpu11  = get_cpu_time();
 
-    double wall1 = wall11 - wall01;
-    double cpu1 = cpu11 - cpu01;
+    // double wall1 = wall11 - wall01;
+    // double cpu1 = cpu11 - cpu01;
 
     // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelConverror: %d", err);
 
@@ -1152,8 +1173,8 @@ inline void OpenCLConv(const float* input_data, int input_size,
 
   // clEnqueueUnmapMemObject(queue,d_bias,(void *) biasfloat,0, NULL, &event_unmapbias);
 
-  err = clEnqueueWriteBuffer(queue, d_bias, CL_TRUE, 0,
-                                 bias_size*sizeof(float), bias_data, 0, NULL, &event_unmapbias);
+  // err = clEnqueueWriteBuffer(queue, d_bias, CL_TRUE, 0,
+  //                                bias_size*sizeof(float), bias_data, 0, NULL, &event_unmapbias);
 
 
 
@@ -1204,7 +1225,7 @@ inline void OpenCLConv(const float* input_data, int input_size,
   // // note: andoird log
   // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Walltime setkernelargs: %lf", wall);
 
-  cl_event eventwaitlist[5] = {event_unmapinput,event_unmapfilter,event_unmapbias,event_writedimsizes,event_writedimstrides};
+  // cl_event eventwaitlist[4] = {event_unmapinput,event_unmapfilter,event_writedimsizes,event_writedimstrides};
 
   clFinish(queue);
 
@@ -1212,8 +1233,11 @@ inline void OpenCLConv(const float* input_data, int input_size,
   // double cpu0  = get_cpu_time();
 
 
-  cl_float4 omin = {output_activation_min, output_activation_min, output_activation_min, output_activation_min};
-  cl_float4 omax = {output_activation_max, output_activation_max, output_activation_max, output_activation_max};
+  // cl_float4 omin = {output_activation_min, output_activation_min, output_activation_min, output_activation_min};
+  // cl_float4 omax = {output_activation_max, output_activation_max, output_activation_max, output_activation_max};
+
+  // double wall01 = get_wall_time();
+  // double cpu01  = get_cpu_time();
 
   if((dim_sizes[6] == 1) && (dim_sizes[5] == 1) && (stride_width == 1) && (stride_height == 1) && (pad_width == 0) && (pad_height == 0)) {
     // cl_mem d_output2 = clCreateBuffer(context, CL_MEM_WRITE_ONLY, output_size/output_depth*d_output_depth*sizeof(float), NULL, NULL);
@@ -1225,14 +1249,14 @@ inline void OpenCLConv(const float* input_data, int input_size,
 
     err  = clSetKernelArg(kernelmatmul, 0, sizeof(cl_mem), &d_input);
     err  = clSetKernelArg(kernelmatmul, 1, sizeof(cl_mem), &d_filter);
-    err  = clSetKernelArg(kernelmatmul, 2, sizeof(cl_mem), &d_bias);
-    err  = clSetKernelArg(kernelmatmul, 3, sizeof(cl_mem), &d_output);
-    err  = clSetKernelArg(kernelmatmul, 4, sizeof(int), &m_rows);
-    err  = clSetKernelArg(kernelmatmul, 5, sizeof(int), &m_cols);
-    err  = clSetKernelArg(kernelmatmul, 6, sizeof(int), &n_batch);
-    err  = clSetKernelArg(kernelmatmul, 7, sizeof(int), &bias_stride);
-    err  = clSetKernelArg(kernelmatmul, 8, sizeof(cl_float4), &omin);
-    err  = clSetKernelArg(kernelmatmul, 9, sizeof(cl_float4), &omax);
+    // err  = clSetKernelArg(kernelmatmul, 2, sizeof(cl_mem), &d_bias);
+    err  = clSetKernelArg(kernelmatmul, 2, sizeof(cl_mem), &d_output);
+    err  = clSetKernelArg(kernelmatmul, 3, sizeof(int), &m_rows);
+    err  = clSetKernelArg(kernelmatmul, 4, sizeof(int), &m_cols);
+    err  = clSetKernelArg(kernelmatmul, 5, sizeof(int), &n_batch);
+    // err  = clSetKernelArg(kernelmatmul, 7, sizeof(int), &bias_stride);
+    // err  = clSetKernelArg(kernelmatmul, 8, sizeof(cl_float4), &omin);
+    // err  = clSetKernelArg(kernelmatmul, 9, sizeof(cl_float4), &omax);
 
     //conv matmul local
     // const size_t local[2] = { 8, 32 };
@@ -1284,19 +1308,137 @@ inline void OpenCLConv(const float* input_data, int input_size,
     clFinish(queue);
     // clReleaseMemObject(d_output2);
   }
+  else if((dim_sizes[6] > 2) && (dim_sizes[5] > 2) && (dim_sizes[6] < 8) && (dim_sizes[5] < 8) && (stride_width == 1) && (stride_height == 1) && (pad_width == 0) && (pad_height == 0)) {
+    int xsize = ((output_width-1)/16+1)*16;
+    int ysize = ((output_height-1)/8+1)*8;
+
+    err  = clSetKernelArg(kernellocalall, 0, sizeof(cl_mem), &d_input);
+    err  = clSetKernelArg(kernellocalall, 1, sizeof(cl_mem), &d_filter);
+    err  = clSetKernelArg(kernellocalall, 2, sizeof(cl_mem), &d_output);
+    err  = clSetKernelArg(kernellocalall, 3, sizeof(int), &stride_width);
+    err  = clSetKernelArg(kernellocalall, 4, sizeof(int), &stride_height);
+    err  = clSetKernelArg(kernellocalall, 5, sizeof(int), &pad_width);
+    err  = clSetKernelArg(kernellocalall, 6, sizeof(int), &pad_height);
+    err  = clSetKernelArg(kernellocalall, 7, sizeof(int), &xsize);
+    err  = clSetKernelArg(kernellocalall, 8, sizeof(int), &ysize);
+    err  = clSetKernelArg(kernellocalall, 9, sizeof(cl_mem), &d_dim_sizes);
+    err  = clSetKernelArg(kernellocalall, 10, sizeof(cl_mem), &d_dim_strides);
+
+    //conv baru with local
+    const size_t local[2] = { 8, 16 };
+    const size_t global[2] = { (size_t) ysize*batches, (size_t) xsize*d_output_depth/4 };
+    
+    double wall0 = get_wall_time();
+    double cpu0  = get_cpu_time();
+    
+    err = clEnqueueNDRangeKernel(queue, kernellocalall, 2, NULL, global, local, 0, NULL, NULL);
+
+    clFinish(queue);
+
+    // // Stop timers
+    double wall1 = get_wall_time();
+    double cpu1  = get_cpu_time();
+
+    double wall = wall1 - wall0;
+    double cpu = cpu1 - cpu0;
+
+    // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelConverror: %d", err);
+
+    // note: andoird log
+    __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelOclConvlocalall: %lf", wall);
+
+    cl_float *host_result = (cl_float*)clEnqueueMapBuffer(
+            queue,
+            d_output,
+            CL_TRUE,
+            CL_MAP_READ,
+            0,
+            output_size/output_depth*d_output_depth*sizeof(float),
+            0, NULL, NULL, NULL);
+
+    for(int i = 0; i < output_size/output_depth; i++) {
+      for(int j = 0; j < output_depth; j++) {
+        output_data[i*output_depth + j] = host_result[i*d_output_depth + j];
+      }
+    }
+
+    clEnqueueUnmapMemObject(queue,d_output,(void *) host_result,0, NULL, NULL);
+    clFinish(queue);
+
+    // clEnqueueReadBuffer(queue, d_output, CL_TRUE, 0, output_size*sizeof(float), output_data, 0, NULL, NULL );
+  }
+  else if((dim_sizes[6] > 2) && (dim_sizes[5] > 2) && (dim_sizes[6] < 8) && (dim_sizes[5] < 8)) {
+    int xsize = ((output_width-1)/20+1)*20;
+    int ysize = ((output_height-1)/8+1)*8;
+
+    err  = clSetKernelArg(kernellocalfilter, 0, sizeof(cl_mem), &d_input);
+    err  = clSetKernelArg(kernellocalfilter, 1, sizeof(cl_mem), &d_filter);
+    err  = clSetKernelArg(kernellocalfilter, 2, sizeof(cl_mem), &d_output);
+    err  = clSetKernelArg(kernellocalfilter, 3, sizeof(int), &stride_width);
+    err  = clSetKernelArg(kernellocalfilter, 4, sizeof(int), &stride_height);
+    err  = clSetKernelArg(kernellocalfilter, 5, sizeof(int), &pad_width);
+    err  = clSetKernelArg(kernellocalfilter, 6, sizeof(int), &pad_height);
+    err  = clSetKernelArg(kernellocalfilter, 7, sizeof(int), &xsize);
+    err  = clSetKernelArg(kernellocalfilter, 8, sizeof(int), &ysize);
+    err  = clSetKernelArg(kernellocalfilter, 9, sizeof(cl_mem), &d_dim_sizes);
+    err  = clSetKernelArg(kernellocalfilter, 10, sizeof(cl_mem), &d_dim_strides);
+
+    //conv baru with local
+    const size_t local[2] = { 8, 20 };
+    const size_t global[2] = { (size_t) ysize*batches, (size_t) xsize*d_output_depth/4 };
+    
+    double wall0 = get_wall_time();
+    double cpu0  = get_cpu_time();
+    
+    err = clEnqueueNDRangeKernel(queue, kernellocalfilter, 2, NULL, global, local, 0, NULL, NULL);
+
+    clFinish(queue);
+
+    // // Stop timers
+    double wall1 = get_wall_time();
+    double cpu1  = get_cpu_time();
+
+    double wall = wall1 - wall0;
+    double cpu = cpu1 - cpu0;
+
+    // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelConverror: %d", err);
+
+    // note: andoird log
+    __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelOclConvlocalfilter: %lf", wall);
+
+    cl_float *host_result = (cl_float*)clEnqueueMapBuffer(
+            queue,
+            d_output,
+            CL_TRUE,
+            CL_MAP_READ,
+            0,
+            output_size/output_depth*d_output_depth*sizeof(float),
+            0, NULL, NULL, NULL);
+
+    for(int i = 0; i < output_size/output_depth; i++) {
+      for(int j = 0; j < output_depth; j++) {
+        output_data[i*output_depth + j] = host_result[i*d_output_depth + j];
+      }
+    }
+
+    clEnqueueUnmapMemObject(queue,d_output,(void *) host_result,0, NULL, NULL);
+    clFinish(queue);
+
+    // clEnqueueReadBuffer(queue, d_output, CL_TRUE, 0, output_size*sizeof(float), output_data, 0, NULL, NULL );
+  }
   else {
     err  = clSetKernelArg(kernelconv, 0, sizeof(cl_mem), &d_input);
     err  = clSetKernelArg(kernelconv, 1, sizeof(cl_mem), &d_filter);
-    err  = clSetKernelArg(kernelconv, 2, sizeof(cl_mem), &d_bias);
-    err  = clSetKernelArg(kernelconv, 3, sizeof(cl_mem), &d_output);
-    err  = clSetKernelArg(kernelconv, 4, sizeof(int), &stride_width);
-    err  = clSetKernelArg(kernelconv, 5, sizeof(int), &stride_height);
-    err  = clSetKernelArg(kernelconv, 6, sizeof(int), &pad_width);
-    err  = clSetKernelArg(kernelconv, 7, sizeof(int), &pad_height);
-    err  = clSetKernelArg(kernelconv, 8, sizeof(cl_mem), &d_dim_sizes);
-    err  = clSetKernelArg(kernelconv, 9, sizeof(cl_mem), &d_dim_strides);
-    err  = clSetKernelArg(kernelconv, 10, sizeof(cl_float4), &omin);
-    err  = clSetKernelArg(kernelconv, 11, sizeof(cl_float4), &omax);
+    // err  = clSetKernelArg(kernelconv, 2, sizeof(cl_mem), &d_bias);
+    err  = clSetKernelArg(kernelconv, 2, sizeof(cl_mem), &d_output);
+    err  = clSetKernelArg(kernelconv, 3, sizeof(int), &stride_width);
+    err  = clSetKernelArg(kernelconv, 4, sizeof(int), &stride_height);
+    err  = clSetKernelArg(kernelconv, 5, sizeof(int), &pad_width);
+    err  = clSetKernelArg(kernelconv, 6, sizeof(int), &pad_height);
+    err  = clSetKernelArg(kernelconv, 7, sizeof(cl_mem), &d_dim_sizes);
+    err  = clSetKernelArg(kernelconv, 8, sizeof(cl_mem), &d_dim_strides);
+    // err  = clSetKernelArg(kernelconv, 10, sizeof(cl_float4), &omin);
+    // err  = clSetKernelArg(kernelconv, 11, sizeof(cl_float4), &omax);
 
     //conv baru with local
     const size_t local[2] = { 8, 32 };
@@ -1340,6 +1482,18 @@ inline void OpenCLConv(const float* input_data, int input_size,
     clEnqueueUnmapMemObject(queue,d_output,(void *) host_result,0, NULL, NULL);
     clFinish(queue);
   }
+
+      double wall11 = get_wall_time();
+    double cpu11  = get_cpu_time();
+
+    double wall1 = wall11 - wall01;
+    double cpu1 = cpu11 - cpu01;
+
+    // // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelConverror: %d", err);
+
+    // // // note: andoird log
+    __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkerneltotal: %lf", wall1);
+
   // else if((stride_width == 1) && (stride_height == 1) && (pad_width == 0) && (pad_height == 0)) {
   //   err  = clSetKernelArg(kernellocalall, 0, sizeof(cl_mem), &d_input);
   //   err  = clSetKernelArg(kernellocalall, 1, sizeof(cl_mem), &d_filter);
@@ -1377,45 +1531,7 @@ inline void OpenCLConv(const float* input_data, int input_size,
 
   //   clEnqueueReadBuffer(queue, d_output, CL_TRUE, 0, output_size*sizeof(float), output_data, 0, NULL, NULL );
   // }
-  // else {
-  //   err  = clSetKernelArg(kernellocalfilter, 0, sizeof(cl_mem), &d_input);
-  //   err  = clSetKernelArg(kernellocalfilter, 1, sizeof(cl_mem), &d_filter);
-  //   err  = clSetKernelArg(kernellocalfilter, 2, sizeof(cl_mem), &d_bias);
-  //   err  = clSetKernelArg(kernellocalfilter, 3, sizeof(cl_mem), &d_output);
-  //   err  = clSetKernelArg(kernellocalfilter, 4, sizeof(int), &stride_width);
-  //   err  = clSetKernelArg(kernellocalfilter, 5, sizeof(int), &stride_height);
-  //   err  = clSetKernelArg(kernellocalfilter, 6, sizeof(int), &pad_width);
-  //   err  = clSetKernelArg(kernellocalfilter, 7, sizeof(int), &pad_height);
-  //   err  = clSetKernelArg(kernellocalfilter, 8, sizeof(cl_mem), &d_dim_sizes);
-  //   err  = clSetKernelArg(kernellocalfilter, 9, sizeof(cl_mem), &d_dim_strides);
-  //   err  = clSetKernelArg(kernellocalfilter, 10, sizeof(float), &output_activation_min);
-  //   err  = clSetKernelArg(kernellocalfilter, 11, sizeof(float), &output_activation_max);
-
-  //   //conv baru with local
-  //   const size_t local[2] = { 8, 32 };
-  //   const size_t global[2] = { (size_t) ((output_height-1)/8+1)*8*batches, (size_t) ((output_width-1)/32+1)*32*output_depth };
-    
-  //   double wall0 = get_wall_time();
-  //   double cpu0  = get_cpu_time();
-    
-  //   err = clEnqueueNDRangeKernel(queue, kernellocalfilter, 2, NULL, global, local, 0, NULL, NULL);
-
-  //   clFinish(queue);
-
-  //   // // Stop timers
-  //   double wall1 = get_wall_time();
-  //   double cpu1  = get_cpu_time();
-
-  //   double wall = wall1 - wall0;
-  //   double cpu = cpu1 - cpu0;
-
-  //   __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelConverror: %d", err);
-
-  //   // note: andoird log
-  //   __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelOclConv: %lf", wall);
-
-  //   clEnqueueReadBuffer(queue, d_output, CL_TRUE, 0, output_size*sizeof(float), output_data, 0, NULL, NULL );
-  // }
+  
 
   // err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global, local, 0, NULL, NULL);
 
@@ -1484,11 +1600,7 @@ inline void Conv(const float* input_data, const Dims<4>& input_dims,
                output_depth, stride_height, stride_width, pad_height, pad_width,
                padding, output_data, output_height, output_width);
 
-  optimized_ops::AddBiasAndEvalActivationFunction(
-      bias_data, bias_dims, output_data, output_dims, output_activation_min,
-      output_activation_max);
-
-   // Stop timers
+     // Stop timers
   double wall1 = get_wall_time();
   double cpu1  = get_cpu_time();
 
@@ -1496,7 +1608,13 @@ inline void Conv(const float* input_data, const Dims<4>& input_dims,
   double cpu = cpu1 - cpu0;
 
   // note: andoird log
-  __android_log_print(ANDROID_LOG_INFO, "Convruntime", "walltimeMultithread: %lf", wall);
+  __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelMultithreadConv: %lf", wall);
+
+  // optimized_ops::AddBiasAndEvalActivationFunction(
+  //     bias_data, bias_dims, output_data, output_dims, output_activation_min,
+  //     output_activation_max);
+
+
 }
 
 inline void Conv2(const float* input_data, const Dims<4>& input_dims,
@@ -1507,6 +1625,8 @@ inline void Conv2(const float* input_data, const Dims<4>& input_dims,
                  float output_activation_max, float* output_data,
                  const Dims<4>& output_dims, float* im2col_data,
                  const Dims<4>& im2col_dims) {
+
+
   (void)im2col_data;  // only used in optimized code.
   (void)im2col_dims;  // only used in optimized code.
   const int batches = MatchingArraySize(input_dims, 3, output_dims, 3);
@@ -1521,6 +1641,12 @@ inline void Conv2(const float* input_data, const Dims<4>& input_dims,
   const int filter_width = ArraySize(filter_dims, 1);
   const int output_height = ArraySize(output_dims, 2);
   const int output_width = ArraySize(output_dims, 1);
+
+
+      // Start Timers
+  double wall0 = get_wall_time();
+  double cpu0  = get_cpu_time();
+
   for (int batch = 0; batch < batches; ++batch) {
     for (int out_y = 0; out_y < output_height; ++out_y) {
       for (int out_x = 0; out_x < output_width; ++out_x) {
@@ -1547,77 +1673,86 @@ inline void Conv2(const float* input_data, const Dims<4>& input_dims,
               }
             }
           }
-          float bias_value = 0.0f;
-          if (bias_data) {
-            bias_value = bias_data[Offset(bias_dims, out_channel, 0, 0, 0)];
-          }
-          output_data[Offset(output_dims, out_channel, out_x, out_y, batch)] =
-              ActivationFunctionWithMinMax(total + bias_value,
-                                           output_activation_min,
-                                           output_activation_max);
+          // float bias_value = 0.0f;
+          // if (bias_data) {
+          //   bias_value = bias_data[Offset(bias_dims, out_channel, 0, 0, 0)];
+          // }
+          output_data[Offset(output_dims, out_channel, out_x, out_y, batch)] = total;
+              // ActivationFunctionWithMinMax(total + bias_value,
+              //                              output_activation_min,
+              //                              output_activation_max);
         }
       }
     }
   }
+  // Stop timers
+  double wall1 = get_wall_time();
+  double cpu1  = get_cpu_time();
+
+  double wall = wall1 - wall0;
+  double cpu = cpu1 - cpu0;
+
+  // note: andoird log
+  __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelNaiveConv: %lf", wall);
 }
 
-void ConvApik(const float* input_data, 
-          const float* filter_data, 
-          const float* bias_data, 
-          float* output_data,
-          int stride_width, int stride_height, 
-          int pad_width, int pad_height, 
-          const int* dim_sizes, const int* dim_strides,
-          float output_activation_min, float output_activation_max) {
-  const int batches = dim_sizes[3]; //MatchingArraySize(input_dims, 3, output_dims, 3);
-  const int input_depth = dim_sizes[0]; //MatchingArraySize(input_dims, 0, filter_dims, 0);
-  const int output_depth = dim_sizes[7]; //MatchingArraySize(filter_dims, 3, output_dims, 0);
-  // if (bias_data) {
-  //   TFLITE_DCHECK_EQ(ArraySize(filter_dims, 3), ArraySize(bias_dims, 0));
-  // }
-  const int input_height = dim_sizes[2]; //ArraySize(input_dims, 2);
-  const int input_width = dim_sizes[1]; //ArraySize(input_dims, 1);
-  const int filter_height = dim_sizes[6]; //ArraySize(filter_dims, 2);
-  const int filter_width = dim_sizes[5]; //ArraySize(filter_dims, 1);
-  const int output_height = dim_sizes[14]; //ArraySize(output_dims, 2);
-  const int output_width = dim_sizes[13]; //ArraySize(output_dims, 1);
-  for (int batch = 0; batch < batches; ++batch) {
-    for (int out_y = 0; out_y < output_height; ++out_y) {
-      for (int out_x = 0; out_x < output_width; ++out_x) {
-        for (int out_channel = output_depth/2; out_channel < output_depth; ++out_channel) {
-          const int in_x_origin = (out_x * stride_width) - pad_width;
-          const int in_y_origin = (out_y * stride_height) - pad_height;
-          float total = 0.0;
-          for (int filter_y = 0; filter_y < filter_height; ++filter_y) {
-            for (int filter_x = 0; filter_x < filter_width; ++filter_x) {
-              for (int in_channel = 0; in_channel < input_depth; ++in_channel) {
-                const int in_x = in_x_origin + filter_x;
-                const int in_y = in_y_origin + filter_y;
-                // If the location is outside the bounds of the input image,
-                // use zero as a default value.
-                if ((in_x >= 0) && (in_x < input_width) && (in_y >= 0) &&
-                    (in_y < input_height)) {
-                  float input_value = input_data[in_channel*dim_strides[0] + in_x*dim_strides[1] + 
-                                                  in_y*dim_strides[2] + batch*dim_strides[3]];
-                  float filter_value =
-                      filter_data[in_channel*dim_strides[4] + filter_x*dim_strides[5] +
-                                         filter_y*dim_strides[6] + out_channel*dim_strides[7]];
-                  total += (input_value * filter_value);
-                }
-              }
-            }
-          }
-          float bias_value = 0.0f;
-          if (bias_data) {
-            bias_value = bias_data[out_channel*dim_strides[8]];
-          }
-          output_data[out_channel*dim_strides[12] + out_x*dim_strides[13] + out_y*dim_strides[14] + batch*dim_strides[15]] 
-            = std::min(std::max(total + bias_value, output_activation_min), output_activation_max);
-        }
-      }
-    }
-  }
-}
+// inline void ConvApik(const float* input_data, 
+//           const float* filter_data, 
+//           const float* bias_data, 
+//           float* output_data,
+//           int stride_width, int stride_height, 
+//           int pad_width, int pad_height, 
+//           const int* dim_sizes, const int* dim_strides,
+//           float output_activation_min, float output_activation_max) {
+//   const int batches = dim_sizes[3]; //MatchingArraySize(input_dims, 3, output_dims, 3);
+//   const int input_depth = dim_sizes[0]; //MatchingArraySize(input_dims, 0, filter_dims, 0);
+//   const int output_depth = dim_sizes[7]; //MatchingArraySize(filter_dims, 3, output_dims, 0);
+//   // if (bias_data) {
+//   //   TFLITE_DCHECK_EQ(ArraySize(filter_dims, 3), ArraySize(bias_dims, 0));
+//   // }
+//   const int input_height = dim_sizes[2]; //ArraySize(input_dims, 2);
+//   const int input_width = dim_sizes[1]; //ArraySize(input_dims, 1);
+//   const int filter_height = dim_sizes[6]; //ArraySize(filter_dims, 2);
+//   const int filter_width = dim_sizes[5]; //ArraySize(filter_dims, 1);
+//   const int output_height = dim_sizes[14]; //ArraySize(output_dims, 2);
+//   const int output_width = dim_sizes[13]; //ArraySize(output_dims, 1);
+//   for (int batch = 0; batch < batches; ++batch) {
+//     for (int out_y = 0; out_y < output_height; ++out_y) {
+//       for (int out_x = 0; out_x < output_width; ++out_x) {
+//         for (int out_channel = output_depth/2; out_channel < output_depth; ++out_channel) {
+//           const int in_x_origin = (out_x * stride_width) - pad_width;
+//           const int in_y_origin = (out_y * stride_height) - pad_height;
+//           float total = 0.0;
+//           for (int filter_y = 0; filter_y < filter_height; ++filter_y) {
+//             for (int filter_x = 0; filter_x < filter_width; ++filter_x) {
+//               for (int in_channel = 0; in_channel < input_depth; ++in_channel) {
+//                 const int in_x = in_x_origin + filter_x;
+//                 const int in_y = in_y_origin + filter_y;
+//                 // If the location is outside the bounds of the input image,
+//                 // use zero as a default value.
+//                 if ((in_x >= 0) && (in_x < input_width) && (in_y >= 0) &&
+//                     (in_y < input_height)) {
+//                   float input_value = input_data[in_channel*dim_strides[0] + in_x*dim_strides[1] + 
+//                                                   in_y*dim_strides[2] + batch*dim_strides[3]];
+//                   float filter_value =
+//                       filter_data[in_channel*dim_strides[4] + filter_x*dim_strides[5] +
+//                                          filter_y*dim_strides[6] + out_channel*dim_strides[7]];
+//                   total += (input_value * filter_value);
+//                 }
+//               }
+//             }
+//           }
+//           float bias_value = 0.0f;
+//           if (bias_data) {
+//             bias_value = bias_data[out_channel*dim_strides[8]];
+//           }
+//           output_data[out_channel*dim_strides[12] + out_x*dim_strides[13] + out_y*dim_strides[14] + batch*dim_strides[15]] 
+//             = std::min(std::max(total + bias_value, output_activation_min), output_activation_max);
+//         }
+//       }
+//     }
+//   }
+// }
 
 inline uint32_t findMemoryType2(VkPhysicalDevice physicalDevice, VkDeviceSize memorySize, VkMemoryPropertyFlags properties) {
         VkPhysicalDeviceMemoryProperties memoryProperties;
@@ -1632,51 +1767,295 @@ inline uint32_t findMemoryType2(VkPhysicalDevice physicalDevice, VkDeviceSize me
   return -1;
 }
 
-inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
-                 const float* filter_data, const Dims<4>& filter_dims,
-                 const float* bias_data, const Dims<4>& bias_dims,
-                 int stride_width, int stride_height, int pad_width,
-                 int pad_height, TfLitePadding padding,
+inline void NeonMatrixBatchVectorMultiplyAccumulate(const float* matrix, int m_rows,
+                                             int m_cols, const float* vector,
+                                             int n_batch, float* result,
+                                             int result_stride) {
+  // Start Timers
+  double wall0 = get_wall_time();
+  double cpu0  = get_cpu_time();
+
+  // PortableMatrixBatchVectorMultiplyAccumulate(matrix,m_rows,m_cols,vector,n_batch,result,1);
+  // OpenCLPortableMatrixBatchVectorMultiplyAccumulate(matrix,m_rows,m_cols,vector,n_batch,result,1);
+
+  // If v_size is not divisible by kWeightsPerNeonLane, we cannot use the main
+  // vectorized loop, and we need to process sequentially. postamble_start shows
+  // the start index where this should happen.
+  const int postamble_start =
+      m_cols - (m_cols & (kFloatWeightsPerNeonLane - 1));
+
+  // The arrays used to cache the vector.
+  float32x4_t* vector_cache_float32x4 =
+      new float32x4_t[(m_cols / kFloatWeightsPerNeonLane) *
+                      sizeof(float32x4_t)];
+  const int kUnrollSize = 2;
+  for (int b = 0; b < n_batch; b++) {
+    float* result_in_batch = result + b * m_rows * result_stride;
+    const float* vector_in_batch = vector + b * m_cols;
+
+    const float* matrix_ptr0 = matrix;
+    // If there is only 1 row, we don't want to assign an illegal pointer.
+    const float* matrix_ptr1 = nullptr;
+    if (m_rows > 1) {
+      matrix_ptr1 = matrix + m_cols;
+    }
+
+    // Cahce the vector.
+    for (int c = 0; c < postamble_start; c += kFloatWeightsPerNeonLane) {
+      vector_cache_float32x4[c >> 2] = vld1q_f32(vector_in_batch + c);
+    }
+
+    // Main matrix by vector multiplication loop, which handles two rows of
+    // matrix by vector multiplication.
+    for (int r = 0; r < (m_rows & ~(kUnrollSize - 1)); r += kUnrollSize) {
+      float32x4_t acc0_32x4 = vmovq_n_f32(0.0);
+      float32x4_t acc1_32x4 = vmovq_n_f32(0.0);
+      for (int c = 0; c < postamble_start; c += kFloatWeightsPerNeonLane) {
+        float32x4_t temp = vector_cache_float32x4[c >> 2];
+        // Load 4 float values from vector1 and vector2 and accumulator.
+        float32x4_t v0_f32x4 = vld1q_f32(matrix_ptr0 + c);
+        float32x4_t v1_f32x4 = vld1q_f32(matrix_ptr1 + c);
+        // Vector multiply-accumulate 4 float
+        acc0_32x4 = vmlaq_f32(acc0_32x4, v0_f32x4, temp);
+        acc1_32x4 = vmlaq_f32(acc1_32x4, v1_f32x4, temp);
+      }
+      // Add the 4 intermediate sum values to get the final dot-prod value for
+      // this column.
+      *result_in_batch +=
+          (vgetq_lane_f32(acc0_32x4, 0) + vgetq_lane_f32(acc0_32x4, 1) +
+           vgetq_lane_f32(acc0_32x4, 2) + vgetq_lane_f32(acc0_32x4, 3));
+      *(result_in_batch + result_stride) +=
+          (vgetq_lane_f32(acc1_32x4, 0) + vgetq_lane_f32(acc1_32x4, 1) +
+           vgetq_lane_f32(acc1_32x4, 2) + vgetq_lane_f32(acc1_32x4, 3));
+      for (int c = postamble_start; c < m_cols; c++) {
+        *result_in_batch += matrix_ptr0[c] * vector_in_batch[c];
+        *(result_in_batch + result_stride) +=
+            matrix_ptr1[c] * vector_in_batch[c];
+      }
+      matrix_ptr0 += kUnrollSize * m_cols;
+      matrix_ptr1 += kUnrollSize * m_cols;
+      result_in_batch += kUnrollSize * result_stride;
+    }
+    for (int r = (m_rows & ~(kUnrollSize - 1)); r < m_rows; r++) {
+      float32x4_t acc0_32x4 = vmovq_n_f32(0.0);
+      for (int c = 0; c < postamble_start; c += kFloatWeightsPerNeonLane) {
+        float32x4_t temp = vector_cache_float32x4[c >> 2];
+        // Load 4 float values from vector1 and vector2 and accumulator.
+        float32x4_t v0_f32x4 = vld1q_f32(matrix_ptr0 + c);
+        // Vector multiply-accumulate 4 float
+        acc0_32x4 = vmlaq_f32(acc0_32x4, v0_f32x4, temp);
+      }
+      // Add the 4 intermediate sum values to get the final dot-prod value for
+      // this column.
+      *result_in_batch +=
+          (vgetq_lane_f32(acc0_32x4, 0) + vgetq_lane_f32(acc0_32x4, 1) +
+           vgetq_lane_f32(acc0_32x4, 2) + vgetq_lane_f32(acc0_32x4, 3));
+      for (int c = postamble_start; c < m_cols; c++) {
+        *result_in_batch += matrix_ptr0[c] * vector_in_batch[c];
+      }
+      matrix_ptr0 += m_cols;
+      result_in_batch += result_stride;
+    }
+  }
+  delete[] vector_cache_float32x4;
+
+  // Stop timers
+  double wall1 = get_wall_time();
+  double cpu1  = get_cpu_time();
+
+  double wall = wall1 - wall0;
+  double cpu = cpu1 - cpu0;
+
+  // note: andoird log
+  __android_log_print(ANDROID_LOG_INFO, "Matmulruntime", "runkernelNEONConv1x1: %lf", wall);
+}
+
+inline void PortableMatrixBatchVectorMultiplyAccumulate(const float* matrix,
+                                                 int m_rows, int m_cols,
+                                                 const float* vector,
+                                                 int n_batch, float* result,
+                                                 int result_stride) {
+  // Start Timers
+  double wall0 = get_wall_time();
+  double cpu0  = get_cpu_time();
+  // vector per kolom
+  // matrix per baris
+  // result per kolom
+  float* result_in_batch = result;
+  for (int b = 0; b < n_batch; b++) {
+    const float* matrix_ptr = matrix;
+    for (int r = 0; r < m_rows; r++) {
+      const float* vector_in_batch = vector + b * m_cols;
+      for (int c = 0; c < m_cols; c++) {
+        *result_in_batch += *matrix_ptr++ * *vector_in_batch++;
+      }
+      result_in_batch += result_stride;
+    }
+  }
+
+  // Stop timers
+  double wall1 = get_wall_time();
+  double cpu1  = get_cpu_time();
+
+  double wall = wall1 - wall0;
+  double cpu = cpu1 - cpu0;
+
+  // note: andoird log
+  __android_log_print(ANDROID_LOG_INFO, "Matmulruntime", "runkernelPortableConv1x1: %lf", wall);
+}
+
+inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims0,
+                 const float* filter_data, const Dims<4>& filter_dims0,
+                 const float* bias_data, const Dims<4>& bias_dims0,
+                 int stride_width0, int stride_height0, int pad_width0,
+                 int pad_height0, TfLitePadding padding0,
                  float output_activation_min, float output_activation_max,
-                 float* output_data, const Dims<4>& output_dims,
-                 float* im2col_data, const Dims<4>& im2col_dims,
+                 float* output_data, const Dims<4>& output_dims0,
+                 float* im2col_data, const Dims<4>& im2col_dims0,
                  cl_context context_cl, cl_command_queue queue, cl_program program, cl_mem cl_mem_arr[6], int buffsizes[4],
                  VkPhysicalDevice physicalDevice, VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, VkPipeline pipelineConvMatmul, VkPipelineLayout pipelineLayoutConvMatmul,
     VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex,
     VkCommandPool conv_commandPool, VkCommandBuffer conv_commandBuffer, VkBuffer conv_matrixA, VkBuffer conv_matrixB, VkBuffer conv_matrixC, VkBuffer conv_matrixSizes, VkDeviceMemory conv_bufferMemory) {
   
-  // // if((kernellocalall == NULL) || (kernellocalfilter == NULL) || (kernelmatmul == NULL)) {
-  // if((kernelconv == NULL) || (kernelmatmul == NULL)) {
-  //   // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelmasuksekali");    
-      
-  //   kernelconv = clCreateKernel(program, "convfloat", NULL);
-  //   // kernellocalall = clCreateKernel(program, "convlocalall", NULL);
-  //   // kernellocalfilter = clCreateKernel(program, "convlocalfilter", NULL);
-  //   kernelmatmul = clCreateKernel(program, "convmatmulblock", NULL);
+  if((kernelconv == NULL) || (kernelmatmul == NULL) || (kernellocalfilter == NULL) || (kernellocalall == NULL)) {
+    kernelconv = clCreateKernel(program, "convfloat", NULL);
+    kernelmatmul = clCreateKernel(program, "convmatmulblock", NULL);
+    kernellocalall = clCreateKernel(program, "convlocalall", NULL);
+    kernellocalfilter = clCreateKernel(program, "convlocalfilter", NULL);
+  }
 
-  //   // d_input = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[0]*sizeof(half), NULL, NULL);
-  //   // d_filter = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[1]*sizeof(half), NULL, NULL);
-  //   // d_bias = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[2]*sizeof(half), NULL, NULL);
-  //   // d_output = clCreateBuffer(context_cl, CL_MEM_WRITE_ONLY, buffsizes[3]*sizeof(half), NULL, NULL);
-  //   // d_dim_sizes = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, 16*sizeof(int), NULL, NULL);
-  //   // d_dim_strides = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, 16*sizeof(int), NULL, NULL);
 
+
+  
+
+
+  // untuk eksperimen 
+  Dims<4> input_dims,filter_dims,bias_dims,output_dims,im2col_dims;
+  // float* im2col_data;
+  // im2col_dims.sizes[0] = 0;
+  // im2col_dims.sizes[1] = 0;
+  // im2col_dims.sizes[2] = 0;
+  // im2col_dims.sizes[3] = 0;
+
+  // if(im2col_dims.sizes[0]*im2col_dims.sizes[1]*im2col_dims.sizes[2]*im2col_dims.sizes[3] > 10) {
+  //   for(int i = 0; i < 10; i++) {
+  //     __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelsim2coldata %d: %f", i, im2col_data[i]);
+  //     im2col_data[i] = 0;
+  //   }
   // }
+  
+  // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelpadw: %d", pad_width);
+  // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelpadh: %d", pad_height);
+  // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkerneltfpad: %d", (int) padding);
+
+  // int im2colsize = im2col_dims.sizes[0]*im2col_dims.sizes[1]*im2col_dims.sizes[2]*im2col_dims.sizes[3];
+   // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelsim2colsize0: %d", im2col_dims.sizes[0]);
+   // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelsim2colsize1: %d", im2col_dims.sizes[1]);
+   // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelsim2colsize2: %d", im2col_dims.sizes[2]);
+   // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelsim2colsize3: %d", im2col_dims.sizes[3]);
+
+   // // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelsim2colstride0: %d", im2col_dims.strides[0]);
+   // // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelsim2colstride1: %d", im2col_dims.strides[1]);
+   // // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelsim2colstride2: %d", im2col_dims.strides[2]);
+   // // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelsim2colstride3: %d", im2col_dims.strides[3]);
+
+   //    __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelsinputsize0: %d", input_dims.sizes[0]);
+   // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelsinputsize1: %d", input_dims.sizes[1]);
+   // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelsinputsize2: %d", input_dims.sizes[2]);
+   // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelsinputsize3: %d", input_dims.sizes[3]);
+
+   // // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelsinputstride0: %d", input_dims.strides[0]);
+   // // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelsinputstride1: %d", input_dims.strides[1]);
+   // // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelsinputstride2: %d", input_dims.strides[2]);
+   // // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelsinputstride3: %d", input_dims.strides[3]);
+
+   //    __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelsfiltersize0: %d", filter_dims.sizes[0]);
+   // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelsfiltersize1: %d", filter_dims.sizes[1]);
+   // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelsfiltersize2: %d", filter_dims.sizes[2]);
+   // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelsfiltersize3: %d", filter_dims.sizes[3]);
+
+   // // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelsfilterstride0: %d", filter_dims.strides[0]);
+   // // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelsfilterstride1: %d", filter_dims.strides[1]);
+   // // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelsfilterstride2: %d", filter_dims.strides[2]);
+   // // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelsfilterstride3: %d", filter_dims.strides[3]);
+
+   // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelsoutputsize0: %d", output_dims.sizes[0]);
+   // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelsoutputsize1: %d", output_dims.sizes[1]);
+   // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelsoutputsize2: %d", output_dims.sizes[2]);
+   // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelsoutputsize3: %d", output_dims.sizes[3]);
+
+   //im2col0 = filter1xfilter2xfilter3, im2col1 = output1, im2col2 = output2, im2col3 = 1
+
+    // input
+  input_dims.sizes[0] = 1024;
+  input_dims.sizes[1] = 32;
+  input_dims.sizes[2] = 32;
+  input_dims.sizes[3] = 1;
+  input_dims.strides[0] = 1;
+  input_dims.strides[1] = input_dims.strides[0]*input_dims.sizes[0];
+  input_dims.strides[2] = input_dims.strides[1]*input_dims.sizes[1];
+  input_dims.strides[3] = input_dims.strides[2]*input_dims.sizes[2];
+
+  //filter
+  filter_dims.sizes[0] = input_dims.sizes[0];
+  filter_dims.sizes[1] = 1;
+  filter_dims.sizes[2] = 1;
+  filter_dims.sizes[3] = 1024;
+  filter_dims.strides[0] = 1;
+  filter_dims.strides[1] = filter_dims.strides[0]*filter_dims.sizes[0];
+  filter_dims.strides[2] = filter_dims.strides[1]*filter_dims.sizes[1];
+  filter_dims.strides[3] = filter_dims.strides[2]*filter_dims.sizes[2];
+
+  //bias
+  bias_dims.sizes[0] = filter_dims.sizes[3];
+  bias_dims.sizes[1] = 1;
+  bias_dims.sizes[2] = 1;
+  bias_dims.sizes[3] = 1;
+  bias_dims.strides[0] = 1;
+  bias_dims.strides[1] = bias_dims.strides[0]*bias_dims.sizes[0];
+  bias_dims.strides[2] = bias_dims.strides[1]*bias_dims.sizes[1];
+  bias_dims.strides[3] = bias_dims.strides[2]*bias_dims.sizes[2];
+
+  //output
+  output_dims.sizes[0] = filter_dims.sizes[3];
+  output_dims.sizes[1] = input_dims.sizes[1] - filter_dims.sizes[1] + 1;
+  output_dims.sizes[2] = input_dims.sizes[2] - filter_dims.sizes[2] + 1;
+  output_dims.sizes[3] = input_dims.sizes[3];
+  output_dims.strides[0] = 1;
+  output_dims.strides[1] = output_dims.strides[0]*output_dims.sizes[0];
+  output_dims.strides[2] = output_dims.strides[1]*output_dims.sizes[1];
+  output_dims.strides[3] = output_dims.strides[2]*output_dims.sizes[2];
+
+  //im2col
+  im2col_dims.sizes[0] = filter_dims.sizes[0]*filter_dims.sizes[1]*filter_dims.sizes[2];
+  im2col_dims.sizes[1] = output_dims.sizes[1];
+  im2col_dims.sizes[2] = output_dims.sizes[2];
+  im2col_dims.sizes[3] = input_dims.sizes[3];
+  im2col_dims.strides[0] = 1;
+  im2col_dims.strides[1] = im2col_dims.strides[0]*im2col_dims.sizes[0];
+  im2col_dims.strides[2] = im2col_dims.strides[1]*im2col_dims.sizes[1];
+  im2col_dims.strides[3] = im2col_dims.strides[2]*im2col_dims.sizes[2];
+
+  TfLitePadding padding = kTfLitePaddingValid;
+  int stride_width = 1;
+  int stride_height = 1;
+  int pad_width = 0;
+  int pad_height = 0;
 
   // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelstridew: %d", stride_width);
   // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelstrideh: %d", stride_width);
   // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelpadw: %d", pad_width);
   // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelpadh: %d", pad_width);
 
-  int inheightsize = input_dims.sizes[2];
-  int inwidthsize = input_dims.sizes[1];
-  int indepthsize = input_dims.sizes[0];
-  int inbatchsize = input_dims.sizes[3];
+  // int inheightsize = input_dims.sizes[2];
+  // int inwidthsize = input_dims.sizes[1];
+  // int indepthsize = input_dims.sizes[0];
+  // int inbatchsize = input_dims.sizes[3];
 
-  int strides0 = input_dims.strides[0];
-  int strides1 = input_dims.strides[1];
-  int strides2 = input_dims.strides[2];
-  int strides3 = input_dims.strides[3];
+  // int strides0 = input_dims.strides[0];
+  // int strides1 = input_dims.strides[1];
+  // int strides2 = input_dims.strides[2];
+  // int strides3 = input_dims.strides[3];
 
   // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Input height: %d", inheightsize);
   // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "Input width: %d", inwidthsize);
@@ -1708,6 +2087,8 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
   sizes = (int*)malloc(16*sizeof(int));
   strides = (int*)malloc(16*sizeof(int));
 
+
+/////////////////////////////////////////
   //input
   sizes[0] = input_dims.sizes[0];
   sizes[1] = input_dims.sizes[1];
@@ -1752,6 +2133,7 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
   int filter_size = input_depth*output_depth*filter_width*filter_height;
   int bias_size = output_depth;
   int output_size = batches*output_width*output_height*output_depth;
+  int im2col_size = im2col_dims.sizes[0]*im2col_dims.sizes[1]*im2col_dims.sizes[2]*im2col_dims.sizes[3];
 
   // __android_log_print(ANDROID_LOG_INFO, "VectorSize", "InputSizeconv: %d", input_size);
   // __android_log_print(ANDROID_LOG_INFO, "VectorSize", "OutputSizeconv: %d", output_size);
@@ -1862,15 +2244,122 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
     //       half_cast<half>(output_activation_min), half_cast<half>(output_activation_max),
     //       context_cl, queue, program, cl_mem_arr);
 
-        // OpenCLConv(input_data, input_size,
-        //   filter_data, filter_size,
-        //   bias_data, bias_size,
-        //   output_data, output_size,
-        //   stride_width, stride_height, 
-        //   pad_width, pad_height, 
-        //   sizes, strides,
-        //   output_activation_min, output_activation_max,
-        //   context_cl, queue, program, cl_mem_arr);
+
+  // untuk eksperimen
+  float* input = (float*)malloc(input_size*sizeof(float));
+  float* filter = (float*)malloc(filter_size*sizeof(float));
+  float* bias = (float*)malloc(bias_size*sizeof(float));
+  float* output = (float*)malloc(output_size*sizeof(float));
+  float* im2col = (float*)malloc(im2col_size*sizeof(float));
+
+  for(int i = 0; i < input_size; i++) {
+    input[i] = 1;
+  }
+  for(int i = 0; i < filter_size; i++) {
+    filter[i] = 1;
+  }
+  for(int i = 0; i < bias_size; i++) {
+    bias[i] = 1;
+  }
+  for(int i = 0; i < im2col_size; i++) {
+    im2col[i] = 1;
+  }
+
+  // int m_cols = sizes[0];
+  // int m_rows = sizes[1]*sizes[2]*sizes[3];
+  // int n_batch = sizes[7];
+
+  OpenCLConv(input, input_size,
+    filter, filter_size,
+    bias, bias_size,
+    output, output_size,
+    stride_width, stride_height, 
+    pad_width, pad_height, 
+    sizes, strides,
+    output_activation_min, output_activation_max,
+    context_cl, queue, program, cl_mem_arr);
+
+  sleep(1);
+
+  // // NeonMatrixBatchVectorMultiplyAccumulate(input,m_rows,m_cols,filter,n_batch,output,1);
+  Conv(input, input_dims,
+    filter, filter_dims,
+    bias, bias_dims,
+    stride_width, stride_height, 
+    pad_width, pad_height, 
+    padding,
+    output_activation_min, output_activation_max,
+    output, output_dims,
+    im2col_data, im2col_dims);
+
+  sleep(1);
+
+  // double sum = 0.0;
+  // for(int i = 0; i < output_size; i++) {
+  //   sum += output[i];
+  // }
+
+  // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelsummultithread: %lf", sum);
+
+  // for(int i = 0; i < output_size; i++) {
+  //   output[i] = 0;
+  // }
+
+  // PortableMatrixBatchVectorMultiplyAccumulate(input,m_rows,m_cols,filter,n_batch,output,1);
+  // Conv2(input, input_dims,
+  //   filter, filter_dims,
+  //   bias, bias_dims,
+  //   stride_width, stride_height, 
+  //   pad_width, pad_height,
+  //   output_activation_min, output_activation_max,
+  //   output, output_dims,
+  //   im2col_data, im2col_dims);
+
+  // sleep(1);
+
+  // double sum = 0.0;
+  // for(int i = 0; i < output_size; i++) {
+  //   sum += output[i];
+  // }
+
+  // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelsumnaive: %lf", sum);
+
+  // for(int i = 0; i < output_size; i++) {
+  //   output[i] = 0;
+  // }
+
+
+
+  // sum = 0.0;
+  // for(int i = 0; i < output_size; i++) {
+  //   sum += output[i];
+  // }
+
+  // __android_log_print(ANDROID_LOG_INFO, "Convruntime", "runkernelsumopencl: %lf", sum);
+
+  // for(int i = 0; i < output_size; i++) {
+  //   output[i] = 0;
+  // }
+
+  free(input);
+  free(filter);
+  free(bias);
+  free(output);
+  free(im2col);
+
+  // OpenCLConv(input_data, input_size,
+  //         filter_data, filter_size,
+  //         bias_data, bias_size,
+  //         output_data, output_size,
+  //         stride_width, stride_height, 
+  //         pad_width, pad_height, 
+  //         sizes, strides,
+  //         output_activation_min, output_activation_max,
+  //         context_cl, queue, program, cl_mem_arr);
+
+  //   optimized_ops::AddBiasAndEvalActivationFunction(
+  //     bias_data, bias_dims, output_data, output_dims, output_activation_min,
+  //     output_activation_max);
 
   // for(int i = 0; i < output_size; i++) {
   //   // half halfTmp(vector[i]);
@@ -1885,32 +2374,32 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
   // double wall0 = get_wall_time();
   // double cpu0  = get_cpu_time();
 
-  if((filter_width == 1) && (filter_height == 1) && (stride_width == 1) && (stride_height == 1) && (pad_width == 0) && (pad_height == 0))
-  {__android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "runkernelmasuksini1x1");
-  vulkanTestConv(buffsizes, input_data, input_size,
-          filter_data, filter_size,
-          bias_data, bias_size,
-          output_data, output_size,
-          stride_width, stride_height, 
-          pad_width, pad_height, 
-          sizes, strides,
-          output_activation_min, output_activation_max,
-          physicalDevice, device, pipelineConvMatmul, pipelineLayoutConvMatmul, 
-          descriptorSetLayoutConv, queueV, queueFamilyIndex,
-          conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixB, conv_matrixC, conv_matrixSizes, conv_bufferMemory);
-  }
-  else
-  vulkanTestConv(buffsizes, input_data, input_size,
-        filter_data, filter_size,
-        bias_data, bias_size,
-        output_data, output_size,
-        stride_width, stride_height, 
-        pad_width, pad_height, 
-        sizes, strides,
-        output_activation_min, output_activation_max,
-        physicalDevice, device, pipelineConv, pipelineLayoutConv, 
-        descriptorSetLayoutConv, queueV, queueFamilyIndex,
-        conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixB, conv_matrixC, conv_matrixSizes, conv_bufferMemory);
+  // if((filter_width == 1) && (filter_height == 1) && (stride_width == 1) && (stride_height == 1) && (pad_width == 0) && (pad_height == 0))
+  // {__android_log_print(ANDROID_LOG_INFO, "VulkanConvDetail", "runkernelmasuksini1x1");
+  // vulkanTestConv(buffsizes, input_data, input_size,
+  //         filter_data, filter_size,
+  //         bias_data, bias_size,
+  //         output_data, output_size,
+  //         stride_width, stride_height, 
+  //         pad_width, pad_height, 
+  //         sizes, strides,
+  //         output_activation_min, output_activation_max,
+  //         physicalDevice, device, pipelineConvMatmul, pipelineLayoutConvMatmul, 
+  //         descriptorSetLayoutConv, queueV, queueFamilyIndex,
+  //         conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixB, conv_matrixC, conv_matrixSizes, conv_bufferMemory);
+  // }
+  // else
+  // vulkanTestConv(buffsizes, input_data, input_size,
+  //       filter_data, filter_size,
+  //       bias_data, bias_size,
+  //       output_data, output_size,
+  //       stride_width, stride_height, 
+  //       pad_width, pad_height, 
+  //       sizes, strides,
+  //       output_activation_min, output_activation_max,
+  //       physicalDevice, device, pipelineConv, pipelineLayoutConv, 
+  //       descriptorSetLayoutConv, queueV, queueFamilyIndex,
+  //       conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixB, conv_matrixC, conv_matrixSizes, conv_bufferMemory);
 
   // // // Stop timers
   // // double wall1 = get_wall_time();

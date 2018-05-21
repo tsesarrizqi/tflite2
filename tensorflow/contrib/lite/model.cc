@@ -106,12 +106,10 @@ const char *kernelSource =           "\n" \
 "}   \n" \
 "__kernel void convfloat(__global float4* input_data,    \n" \
 "          __global float4* filter_data,    \n" \
-"          __global float4* bias_data,    \n" \
 "          __global float4* output_data,   \n" \
 "          int stride_width, int stride_height,    \n" \
 "          int pad_width, int pad_height,    \n" \
-"          __global int16* dim_sizes0, __global int16* dim_strides0,   \n" \
-"          float4 output_activation_min, float4 output_activation_max) {   \n" \
+"          __global int16* dim_sizes0, __global int16* dim_strides0) {   \n" \
 "     \n" \
 "    int batchdepth = get_global_id(0);   \n" \
 "    int widthheight = get_global_id(1);   \n" \
@@ -142,131 +140,155 @@ const char *kernelSource =           "\n" \
 "                }   \n" \
 "              }   \n" \
 "            }   \n" \
-"            if (bias_data) {   \n" \
-"              total = total + bias_data[out_channel*dim_strides.s8/4];   \n" \
-"            } \n" \
-"            output_data[out_channel*dim_strides.sc/4 + out_x*dim_strides.sd + out_y*dim_strides.se + batch*dim_strides.sf] = min(max(total, output_activation_min), output_activation_max); \n" \
+"           // if (bias_data) {   \n" \
+"           //   total = total + bias_data[out_channel*dim_strides.s8/4];   \n" \
+"           // } \n" \
+"            //output_data[out_channel*dim_strides.sc/4 + out_x*dim_strides.sd + out_y*dim_strides.se + batch*dim_strides.sf] = min(max(total, output_activation_min), output_activation_max); \n" \
+"            output_data[out_channel*dim_strides.sc/4 + out_x*dim_strides.sd + out_y*dim_strides.se + batch*dim_strides.sf] = total; \n" \
 "    }  \n" \
 "}   \n" \
 "__kernel void convlocalfilter(__global float4* input_data,    \n" \
 "          __global float4* filter_data,    \n" \
-"          __global float* bias_data,    \n" \
-"          __global float* output_data,   \n" \
+"          __global float4* output_data,   \n" \
 "          int stride_width, int stride_height,    \n" \
 "          int pad_width, int pad_height,    \n" \
-"          __global int* dim_sizes, __global int* dim_strides,   \n" \
-"          float output_activation_min, float output_activation_max) {   \n" \
+"          int xsize, int ysize,    \n" \
+"          __global int* dim_sizes, __global int* dim_strides) {   \n" \
 "     \n" \
-"    __local float4 localfilter[5][5]; \n" \
+"    __local float4 localfilter[8][32]; \n" \
+"    //__local float4 localinput[16][24]; \n" \
 "    int local_y = get_local_id(0);   \n" \
 "    int local_x = get_local_id(1);   \n" \
 "    int ychannel = get_global_id(0);   \n" \
 "    int xchannel = get_global_id(1);   \n" \
-"    int xsize = ((dim_sizes[13]-1)/32+1)*32;   \n" \
-"    int ysize = ((dim_sizes[14]-1)/8+1)*8;   \n" \
+"    int output_depth = dim_sizes[7];   \n" \
 "    int out_x = xchannel\%xsize;   \n" \
 "    int out_y = ychannel\%ysize;   \n" \
-"    int out_channel = xchannel/xsize;   \n" \
+"    int out_channel = (xchannel/xsize)*4;   \n" \
 "    int batch = ychannel/ysize;   \n" \
-"    float total = 0.0;   \n" \
-"    int in_x = 0;   \n" \
-"    int in_y = 0;   \n" \
+"    //int in_width = dim_sizes[1];   \n" \
+"    //int in_height = dim_sizes[2];   \n" \
+"    //int filter_width = dim_sizes[5];   \n" \
+"    //int filter_height = dim_sizes[6];   \n" \
+"    float4 total = {0.0,0.0,0.0,0.0};   \n" \
 "      for (int in_channel = 0; in_channel < dim_sizes[0]/4; ++in_channel) {   \n" \
-"        barrier(CLK_LOCAL_MEM_FENCE);   \n" \
+"        int tmp1 = in_channel*dim_strides[4] + local_x*dim_strides[5]/4 + local_y*dim_strides[6]/4;  \n" \
+"        int tmp2 = dim_strides[7]/4;  \n" \
 "        //load filter  \n" \
 "        if((local_y < dim_sizes[6]) && (local_x < dim_sizes[5])) {   \n" \
-"          localfilter[local_y][local_x] = filter_data[in_channel*dim_strides[4] + local_x*dim_strides[5]/4 + local_y*dim_strides[6]/4 + out_channel*dim_strides[7]/4];   \n" \
+"          localfilter[local_y][local_x] = filter_data[tmp1 + out_channel*tmp2];   \n" \
+"          if(out_channel+1 < output_depth) localfilter[local_y][local_x + 8] = filter_data[tmp1 + (out_channel+1)*tmp2];   \n" \
+"          if(out_channel+2 < output_depth) localfilter[local_y][local_x + 16] = filter_data[tmp1 + (out_channel+2)*tmp2];   \n" \
+"          if(out_channel+3 < output_depth) localfilter[local_y][local_x + 24] = filter_data[tmp1 + (out_channel+3)*tmp2];   \n" \
 "        }   \n" \
+"        //tmp1 = in_channel*dim_strides[0] + batch*dim_strides[3]/4;  \n" \
+"        //tmp2 = dim_strides[1]/4;  \n" \
+"        //int tmp3 = dim_strides[2]/4;  \n" \
+"        //load input     \n" \
+"        //if((out_x < in_width) && (out_y < in_height))\n" \
+"          //localinput[local_y][local_x] = input_data[tmp1 + out_x*tmp2 + out_y*tmp3];\n" \
+"        //if((out_x < in_width) && ((out_y+8) < in_height) && (local_y < filter_height))\n" \
+"          //localinput[local_y+8][local_x] = input_data[tmp1 + out_x*tmp2 + (out_y+8)*tmp3];\n" \
+"        //if(((out_x+16) < in_width) && (out_y < in_height) && (local_x < filter_width))\n" \
+"        //  localinput[local_y][local_x+16] = input_data[tmp1 + (out_x+16)*tmp2 + out_y*tmp3];\n" \
+"        //if(((out_x+16) < in_width) && ((out_y+8) < in_height) && (local_x < filter_width) && (local_y < filter_height))\n" \
+"        //  localinput[local_y+8][local_x+16] = input_data[tmp1 + (out_x+16)*tmp2 + (out_y+8)*tmp3];\n" \
 "        barrier(CLK_LOCAL_MEM_FENCE);   \n" \
 "        if((out_x < dim_sizes[13]) && (out_y < dim_sizes[14])) {   \n" \
 "          for (int filter_y = 0; filter_y < dim_sizes[6]; ++filter_y) {   \n" \
 "            for (int filter_x = 0; filter_x < dim_sizes[5]; ++filter_x) {   \n" \
-"              in_x = (out_x * stride_width) - pad_width + filter_x;   \n" \
-"              in_y = (out_y * stride_height) - pad_height + filter_y;   \n" \
+"              //int in_x = local_x + filter_x;   \n" \
+"              //int in_y = local_y + filter_y;\n" \
+"              int in_x = (out_x * stride_width) - pad_width + filter_x;   \n" \
+"              int in_y = (out_y * stride_height) - pad_height + filter_y;   \n" \
 "              if ((in_x >= 0) && (in_x < dim_sizes[1]) && (in_y >= 0) &&   \n" \
 "                  (in_y < dim_sizes[2])) {   \n" \
-"                //float4 input_value = input_data[in_channel*dim_strides[0] + in_x*dim_strides[1]/4 + in_y*dim_strides[2]/4 + batch*dim_strides[3]/4];   \n" \
-"                //float4 filter_value = localfilter[filter_y][filter_x];  \n" \
-"                // float4 filter_value = filter_data[in_channel*dim_strides[4] + filter_x*dim_strides[5]/4 + filter_y*dim_strides[6]/4 + out_channel*dim_strides[7]/4];  \n" \
-"                total += dot(input_data[in_channel*dim_strides[0] + in_x*dim_strides[1]/4 + in_y*dim_strides[2]/4 + batch*dim_strides[3]/4],localfilter[filter_y][filter_x]);   \n" \
+"                //float4 input_value = localinput[in_y][in_x];\n" \
+"                float4 input_value = input_data[in_channel*dim_strides[0] + in_x*dim_strides[1]/4 + in_y*dim_strides[2]/4 + batch*dim_strides[3]/4];   \n" \
+"                total.x += dot(input_value,localfilter[filter_y][filter_x]);   \n" \
+"                total.y += dot(input_value,localfilter[filter_y][filter_x + 8]);   \n" \
+"                total.z += dot(input_value,localfilter[filter_y][filter_x + 16]);   \n" \
+"                total.w += dot(input_value,localfilter[filter_y][filter_x + 24]);   \n" \
 "              }   \n" \
 "            }   \n" \
 "          }   \n" \
 "        }   \n" \
+"        barrier(CLK_LOCAL_MEM_FENCE);   \n" \
 "      }  \n" \
 "      if((out_x < dim_sizes[13]) && (out_y < dim_sizes[14])) {   \n" \
-"        //float bias_value = 0.0;   \n" \
-"        if (dim_sizes[8] > 0) {   \n" \
-"          total = min(max(total + bias_data[out_channel*dim_strides[8]], output_activation_min), output_activation_max);   \n" \
-"        } \n" \
-"        output_data[out_channel*dim_strides[12] + out_x*dim_strides[13] + out_y*dim_strides[14] + batch*dim_strides[15]] = total; \n" \
+"        output_data[out_channel*dim_strides[12]/4 + out_x*dim_strides[13] + out_y*dim_strides[14] + batch*dim_strides[15]] = total; \n" \
 "      }   \n" \
 "} \n" \
 "__kernel void convlocalall(__global float4* input_data,    \n" \
-"          __constant float4* filter_data,    \n" \
-"          __global float* bias_data,    \n" \
-"          __global float* output_data,   \n" \
+"          __global float4* filter_data,    \n" \
+"          __global float4* output_data,   \n" \
 "          int stride_width, int stride_height,    \n" \
 "          int pad_width, int pad_height,    \n" \
-"          __global int16* dim_sizes0, __global int16* dim_strides0,   \n" \
-"          float output_activation_min, float output_activation_max) {   \n" \
+"          int xsize, int ysize,    \n" \
+"          __global int* dim_sizes, __global int* dim_strides) {   \n" \
 "     \n" \
+"    __local float4 localfilter[8][32]; \n" \
+"    __local float4 localinput[16][24]; \n" \
 "    int local_y = get_local_id(0);   \n" \
 "    int local_x = get_local_id(1);   \n" \
 "    int ychannel = get_global_id(0);   \n" \
 "    int xchannel = get_global_id(1);   \n" \
-"    int16 dim_sizes = dim_sizes0[0];   \n" \
-"    int16 dim_strides = dim_strides0[0];   \n" \
-"    int xsize = ((dim_sizes.sd-1)/16+1)*16;   \n" \
-"    int ysize = ((dim_sizes.se-1)/8+1)*8;   \n" \
+"    int output_depth = dim_sizes[7];   \n" \
 "    int out_x = xchannel\%xsize;   \n" \
 "    int out_y = ychannel\%ysize;   \n" \
-"    int out_channel = xchannel/xsize;   \n" \
+"    int out_channel = (xchannel/xsize)*4;   \n" \
 "    int batch = ychannel/ysize;   \n" \
-"    __local float4 localfilter[8][8]; \n" \
-"    __local float4 localinput[16][24]; \n" \
-"      float total = 0.0;   \n" \
-"      for (int in_channel = 0; in_channel < dim_sizes.s0/4; ++in_channel) {   \n" \
-"        barrier(CLK_LOCAL_MEM_FENCE);   \n" \
-"        //load input     \n" \
-"        if((out_x < dim_sizes.s1) && (out_y < dim_sizes.s2))\n" \
-"          localinput[local_y][local_x] = input_data[in_channel*dim_strides.s0 + out_x*dim_strides.s1/4 + out_y*dim_strides.s2/4 + batch*dim_strides.s3/4];\n" \
-"        if((out_x < dim_sizes.s1) && ((out_y+8) < dim_sizes.s2) && (local_y < dim_sizes.s6))\n" \
-"          localinput[local_y+8][local_x] = input_data[in_channel*dim_strides.s0 + out_x*dim_strides.s1/4 + (out_y+8)*dim_strides.s2/4 + batch*dim_strides.s3/4];\n" \
-"        if(((out_x+16) < dim_sizes.s1) && (out_y < dim_sizes.s2) && (local_x < dim_sizes.s5))\n" \
-"          localinput[local_y][local_x+16] = input_data[in_channel*dim_strides.s0 + (out_x+16)*dim_strides.s1/4 + out_y*dim_strides.s2/4 + batch*dim_strides.s3/4];\n" \
-"        if(((out_x+16) < dim_sizes.s1) && ((out_y+8) < dim_sizes.s2) && (local_x < dim_sizes.s5) && (local_y < dim_sizes.s6))\n" \
-"          localinput[local_y+8][local_x+16] = input_data[in_channel*dim_strides.s0 + (out_x+16)*dim_strides.s1/4 + (out_y+8)*dim_strides.s2/4 + batch*dim_strides.s3/4];\n" \
+"    int in_width = dim_sizes[1];   \n" \
+"    int in_height = dim_sizes[2];   \n" \
+"    int filter_width = dim_sizes[5];   \n" \
+"    int filter_height = dim_sizes[6];   \n" \
+"    float4 total = {0.0,0.0,0.0,0.0};   \n" \
+"      for (int in_channel = 0; in_channel < dim_sizes[0]/4; ++in_channel) {   \n" \
+"        int tmp1 = in_channel*dim_strides[4] + local_x*dim_strides[5]/4 + local_y*dim_strides[6]/4;  \n" \
+"        int tmp2 = dim_strides[7]/4;  \n" \
 "        //load filter  \n" \
-"        if((local_y < dim_sizes.s6) && (local_x < dim_sizes.s5)) {   \n" \
-"          localfilter[local_y][local_x] = filter_data[in_channel*dim_strides.s4 + local_x*dim_strides.s5/4 + local_y*dim_strides.s6/4 + out_channel*dim_strides.s7/4];   \n" \
+"        if((local_y < dim_sizes[6]) && (local_x < dim_sizes[5])) {   \n" \
+"          localfilter[local_y][local_x] = filter_data[tmp1 + out_channel*tmp2];   \n" \
+"          if(out_channel+1 < output_depth) localfilter[local_y][local_x + 8] = filter_data[tmp1 + (out_channel+1)*tmp2];   \n" \
+"          if(out_channel+2 < output_depth) localfilter[local_y][local_x + 16] = filter_data[tmp1 + (out_channel+2)*tmp2];   \n" \
+"          if(out_channel+3 < output_depth) localfilter[local_y][local_x + 24] = filter_data[tmp1 + (out_channel+3)*tmp2];   \n" \
 "        }   \n" \
+"        tmp1 = in_channel*dim_strides[0] + batch*dim_strides[3]/4;  \n" \
+"        tmp2 = dim_strides[1]/4;  \n" \
+"        int tmp3 = dim_strides[2]/4;  \n" \
+"        //load input     \n" \
+"        if((out_x < in_width) && (out_y < in_height))\n" \
+"          localinput[local_y][local_x] = input_data[tmp1 + out_x*tmp2 + out_y*tmp3];\n" \
+"        if((out_x < in_width) && ((out_y+8) < in_height) && (local_y < filter_height))\n" \
+"          localinput[local_y+8][local_x] = input_data[tmp1 + out_x*tmp2 + (out_y+8)*tmp3];\n" \
+"        if(((out_x+16) < in_width) && (out_y < in_height) && (local_x < filter_width))\n" \
+"          localinput[local_y][local_x+16] = input_data[tmp1 + (out_x+16)*tmp2 + out_y*tmp3];\n" \
+"        if(((out_x+16) < in_width) && ((out_y+8) < in_height) && (local_x < filter_width) && (local_y < filter_height))\n" \
+"          localinput[local_y+8][local_x+16] = input_data[tmp1 + (out_x+16)*tmp2 + (out_y+8)*tmp3];\n" \
 "        barrier(CLK_LOCAL_MEM_FENCE);   \n" \
-"        if((out_x < dim_sizes.sd) && (out_y < dim_sizes.se)) {   \n" \
-"          for (int filter_y = 0; filter_y < dim_sizes.s6; ++filter_y) {   \n" \
-"            for (int filter_x = 0; filter_x < dim_sizes.s5; ++filter_x) {   \n" \
-"              int in_x = (local_x * stride_width) - pad_width + filter_x;   \n" \
-"              int in_y = (local_y * stride_height) - pad_height + filter_y;\n" \
-"              // int in_x = (out_x * stride_width) - pad_width + filter_x;   \n" \
-"              // int in_y = (out_y * stride_height) - pad_height + filter_y;   \n" \
-"              if ((in_x >= 0) && (in_x < dim_sizes.s1) && (in_y >= 0) &&   \n" \
-"                  (in_y < dim_sizes.s2)) {   \n" \
+"        if((out_x < dim_sizes[13]) && (out_y < dim_sizes[14])) {   \n" \
+"          for (int filter_y = 0; filter_y < filter_height; ++filter_y) {   \n" \
+"            for (int filter_x = 0; filter_x < filter_width; ++filter_x) {   \n" \
+"              int in_x = local_x + filter_x;   \n" \
+"              int in_y = local_y + filter_y;\n" \
+"              //int in_x = (out_x * stride_width) - pad_width + filter_x;   \n" \
+"              //int in_y = (out_y * stride_height) - pad_height + filter_y;   \n" \
+"              if ((in_x >= 0) && (in_x < in_width) && (in_y >= 0) &&   \n" \
+"                  (in_y < in_height)) {   \n" \
 "                float4 input_value = localinput[in_y][in_x];\n" \
-"                // float4 input_value = input_data[in_channel*dim_strides.s0 + in_x*dim_strides.s1/4 + in_y*dim_strides.s2/4 + batch*dim_strides.s3/4];   \n" \
-"                float4 filter_value = localfilter[filter_y][filter_x];  \n" \
-"                // float4 filter_value = filter_data[in_channel*dim_strides.s4 + filter_x*dim_strides.s5/4 + filter_y*dim_strides.s6/4 + out_channel*dim_strides.s7/4];  \n" \
-"                total += dot(input_value,filter_value);   \n" \
+"                //float4 input_value = input_data[in_channel*dim_strides[0] + in_x*dim_strides[1]/4 + in_y*dim_strides[2]/4 + batch*dim_strides[3]/4];   \n" \
+"                total.x += dot(input_value,localfilter[filter_y][filter_x]);   \n" \
+"                total.y += dot(input_value,localfilter[filter_y][filter_x + 8]);   \n" \
+"                total.z += dot(input_value,localfilter[filter_y][filter_x + 16]);   \n" \
+"                total.w += dot(input_value,localfilter[filter_y][filter_x + 24]);   \n" \
 "              }   \n" \
 "            }   \n" \
 "          }   \n" \
 "        }   \n" \
+"        barrier(CLK_LOCAL_MEM_FENCE);   \n" \
 "      }  \n" \
-"      if((out_x < dim_sizes.sd) && (out_y < dim_sizes.se)) {   \n" \
-"        float bias_value = 0.0;   \n" \
-"        if (bias_data) {   \n" \
-"          bias_value = bias_data[out_channel*dim_strides.s8];   \n" \
-"        } \n" \
-"        output_data[out_channel*dim_strides.sc + out_x*dim_strides.sd + out_y*dim_strides.se + batch*dim_strides.sf] = min(max(total + bias_value, output_activation_min), output_activation_max); \n" \
+"      if((out_x < dim_sizes[13]) && (out_y < dim_sizes[14])) {   \n" \
+"        output_data[out_channel*dim_strides[12]/4 + out_x*dim_strides[13] + out_y*dim_strides[14] + batch*dim_strides[15]] = total; \n" \
 "      }   \n" \
 "} \n" \
 "__kernel void convmatmul(__global float4* input_data,    \n" \
@@ -339,11 +361,8 @@ const char *kernelSource =           "\n" \
 "} \n" \
 "__kernel void convmatmulblock(__global float4* input_data,    \n" \
 "          __global float4* filter_data,    \n" \
-"          __global float4* bias_data,    \n" \
 "          __global float4* output_data,   \n" \
-"          int m_rows, int m_cols, int n_batch,    \n" \
-"          int bias_stride,   \n" \
-"          float4 output_activation_min, float4 output_activation_max) {   \n" \
+"          int m_rows, int m_cols, int n_batch) {   \n" \
 "    const int row = get_local_id(1);  \n" \
 "    const int col = get_local_id(0);  \n" \
 "    const int globalRow = 32*get_group_id(1) + row;   \n" \
@@ -381,11 +400,12 @@ const char *kernelSource =           "\n" \
 "    }   \n" \
 "    \n" \
 "    globalCol = (8*get_group_id(0) + col)*4;    \n" \
-"    if (bias_data) {   \n" \
-"      acc = acc + bias_data[globalCol*bias_stride/4];\n" \
-"    } \n" \
+"    //if (bias_data) {   \n" \
+"    //  acc = acc + bias_data[globalCol*bias_stride/4];\n" \
+"    //} \n" \
 "    if((globalCol < n_batch) && (globalRow < m_rows)) {     \n" \
-"      output_data[globalRow*((n_batch-1)/4+1) + globalCol/4] = min(max(acc, output_activation_min), output_activation_max);     \n" \
+"      //output_data[globalRow*((n_batch-1)/4+1) + globalCol/4] = min(max(acc, output_activation_min), output_activation_max);     \n" \
+"      output_data[globalRow*((n_batch-1)/4+1) + globalCol/4] = acc;     \n" \
 "    }      \n" \
 "}      \n" \
 "__kernel void matrixVectorMulF4float(__global float4* result,    \n" \
@@ -444,7 +464,7 @@ VkBuffer conv_matrixC = NULL;
 VkBuffer conv_matrixSizes = NULL;
 VkDeviceMemory conv_bufferMemory = NULL;
 
-int buffsizes[4] = {710432, 1548288, 1024, 1382976};
+int buffsizes[4] = {2100000, 2100000, 1024, 2100000};
 
 // cl_mem cl_mem_arr[6], VkCommandPool conv_commandPool, VkCommandBuffer conv_commandBuffer, VkBuffer conv_matrixA, VkBuffer conv_matrixSizes, VkDeviceMemory conv_bufferMemory
 // cl_mem_arr,conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixSizes, conv_bufferMemory
@@ -1079,7 +1099,7 @@ void initOpenCL() {
 
   d_conv_input = clCreateBuffer(context_cl, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, buffsizes[0]*sizeof(float), NULL, NULL);
   d_conv_filter = clCreateBuffer(context_cl, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, buffsizes[1]*sizeof(float), NULL, NULL);
-  d_conv_bias = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[2]*sizeof(float), NULL, NULL);
+  // d_conv_bias = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, buffsizes[2]*sizeof(float), NULL, NULL);
   d_conv_output = clCreateBuffer(context_cl, CL_MEM_WRITE_ONLY | CL_MEM_ALLOC_HOST_PTR, buffsizes[3]*sizeof(float), NULL, NULL);
   d_conv_dim_sizes = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, 16*sizeof(int), NULL, NULL);
   d_conv_dim_strides = clCreateBuffer(context_cl, CL_MEM_READ_ONLY, 16*sizeof(int), NULL, NULL);
@@ -1813,10 +1833,8 @@ TfLiteStatus InterpreterBuilder::ParseNodes(
     const flatbuffers::Vector<flatbuffers::Offset<Operator>>* operators,
     Interpreter* interpreter) {
   TfLiteStatus status = kTfLiteOk;
-  //note: andoird log
-  // __android_log_print(ANDROID_LOG_INFO, "Ngising", "addnodewithparam");
-  // initOpenCL();
-  initVulkan();
+  initOpenCL();
+  // initVulkan();
   for (int i = 0; i < operators->Length(); ++i) {
     const auto* op = operators->Get(i);
     int index = op->opcode_index();
@@ -1843,10 +1861,7 @@ TfLiteStatus InterpreterBuilder::ParseNodes(
     }
 
     // operators code: 3 convolution, 9 fully connected
-    // __android_log_print(ANDROID_LOG_INFO, "Ngising", "operators %u", op_type);
     if((op_type == 9) || (op_type == 3)) {
-      //note: andoird log
-      // __android_log_print(ANDROID_LOG_INFO, "Ngising", "code 25 benar");
       cl_mem cl_mem_arr[6] = {d_conv_input,d_conv_filter,d_conv_bias,d_conv_output,d_conv_dim_sizes,d_conv_dim_strides};
       if (op->custom_options()) {
         // std::vector<int> vectmp = FlatBufferIntArrayToVector(op->inputs());
