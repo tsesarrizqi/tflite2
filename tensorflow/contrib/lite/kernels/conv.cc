@@ -95,7 +95,7 @@ struct OpData {
 };
     
 // static int buffsizes[4] = {0,0,0,0};
-int buffsizes[4] = {2100000, 2100000, 1024, 2100000};
+int buffsizes[4] = {4200000, 2100000, 1024, 4200000};
 
 // int buffsizes4[4] = {0,0,0,0};
 // inputSizeconv.cc: 710432
@@ -698,7 +698,7 @@ void EvalFloat(TfLiteContext* context, TfLiteNode* node,
     //     GetTensorDims(output), GetTensorData<float>(im2col),
     //     GetTensorDims(im2col));
     multithreaded_ops::ConvOpenCL(
-        GetTensorData<float>(input), GetTensorDims(input), GetTensorData<float>(filter),
+        GetTensorData<float>(input), GetTensorDims(input), GetTensorData<float>(filter), filter_data,
         GetTensorDims(filter), GetTensorData<float>(bias), GetTensorDims(bias),
         params->stride_width, params->stride_height, data->padding.width,
         data->padding.height, params->padding, output_activation_min,

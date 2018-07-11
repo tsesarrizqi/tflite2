@@ -271,7 +271,6 @@ class Interpreter {
   void* OpInit(const TfLiteRegistration& op_reg, const char* buffer,
                size_t length) {
     // //note: andoird log
-    // __android_log_print(ANDROID_LOG_INFO, "Ngising", "opinit");
     if (op_reg.init == nullptr) return nullptr;
     return op_reg.init(&context_, buffer, length);
   }
@@ -283,12 +282,9 @@ class Interpreter {
     VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex,
     VkCommandPool conv_commandPool, VkCommandBuffer conv_commandBuffer, VkBuffer conv_matrixA, VkBuffer conv_matrixB, VkBuffer conv_matrixC, VkBuffer conv_matrixSizes, VkDeviceMemory conv_bufferMemory) {
     // //note: andoird log
-    // __android_log_print(ANDROID_LOG_INFO, "Ngising", "opinit");
     if (op_reg.initopencl == nullptr) {
-      __android_log_print(ANDROID_LOG_INFO, "Ngising", "masuk initopencl null");
       return nullptr;
     }
-    __android_log_print(ANDROID_LOG_INFO, "Ngising", "masuk initopencl");
     return op_reg.initopencl(&context_, buffer, length, context_cl, queue, program, cl_mem_arr,
       physicalDevice, device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, pipelineConvMatmul, pipelineLayoutConvMatmul, 
                descriptorSetLayoutConv, descriptorSetLayoutMatmul, queueV, queueFamilyIndex,

@@ -156,7 +156,6 @@ const char *kernelSource =           "\n" \
 "          __global int* dim_sizes, __global int* dim_strides) {   \n" \
 "     \n" \
 "    __local float4 localfilter[8][32]; \n" \
-"    //__local float4 localinput[16][24]; \n" \
 "    int local_y = get_local_id(0);   \n" \
 "    int local_x = get_local_id(1);   \n" \
 "    int ychannel = get_global_id(0);   \n" \
@@ -166,10 +165,6 @@ const char *kernelSource =           "\n" \
 "    int out_y = ychannel\%ysize;   \n" \
 "    int out_channel = (xchannel/xsize)*4;   \n" \
 "    int batch = ychannel/ysize;   \n" \
-"    //int in_width = dim_sizes[1];   \n" \
-"    //int in_height = dim_sizes[2];   \n" \
-"    //int filter_width = dim_sizes[5];   \n" \
-"    //int filter_height = dim_sizes[6];   \n" \
 "    float4 total = {0.0,0.0,0.0,0.0};   \n" \
 "      for (int in_channel = 0; in_channel < dim_sizes[0]/4; ++in_channel) {   \n" \
 "        int tmp1 = in_channel*dim_strides[4] + local_x*dim_strides[5]/4 + local_y*dim_strides[6]/4;  \n" \
@@ -181,18 +176,6 @@ const char *kernelSource =           "\n" \
 "          if(out_channel+2 < output_depth) localfilter[local_y][local_x + 16] = filter_data[tmp1 + (out_channel+2)*tmp2];   \n" \
 "          if(out_channel+3 < output_depth) localfilter[local_y][local_x + 24] = filter_data[tmp1 + (out_channel+3)*tmp2];   \n" \
 "        }   \n" \
-"        //tmp1 = in_channel*dim_strides[0] + batch*dim_strides[3]/4;  \n" \
-"        //tmp2 = dim_strides[1]/4;  \n" \
-"        //int tmp3 = dim_strides[2]/4;  \n" \
-"        //load input     \n" \
-"        //if((out_x < in_width) && (out_y < in_height))\n" \
-"          //localinput[local_y][local_x] = input_data[tmp1 + out_x*tmp2 + out_y*tmp3];\n" \
-"        //if((out_x < in_width) && ((out_y+8) < in_height) && (local_y < filter_height))\n" \
-"          //localinput[local_y+8][local_x] = input_data[tmp1 + out_x*tmp2 + (out_y+8)*tmp3];\n" \
-"        //if(((out_x+16) < in_width) && (out_y < in_height) && (local_x < filter_width))\n" \
-"        //  localinput[local_y][local_x+16] = input_data[tmp1 + (out_x+16)*tmp2 + out_y*tmp3];\n" \
-"        //if(((out_x+16) < in_width) && ((out_y+8) < in_height) && (local_x < filter_width) && (local_y < filter_height))\n" \
-"        //  localinput[local_y+8][local_x+16] = input_data[tmp1 + (out_x+16)*tmp2 + (out_y+8)*tmp3];\n" \
 "        barrier(CLK_LOCAL_MEM_FENCE);   \n" \
 "        if((out_x < dim_sizes[13]) && (out_y < dim_sizes[14])) {   \n" \
 "          for (int filter_y = 0; filter_y < dim_sizes[6]; ++filter_y) {   \n" \
@@ -203,7 +186,6 @@ const char *kernelSource =           "\n" \
 "              int in_y = (out_y * stride_height) - pad_height + filter_y;   \n" \
 "              if ((in_x >= 0) && (in_x < dim_sizes[1]) && (in_y >= 0) &&   \n" \
 "                  (in_y < dim_sizes[2])) {   \n" \
-"                //float4 input_value = localinput[in_y][in_x];\n" \
 "                float4 input_value = input_data[in_channel*dim_strides[0] + in_x*dim_strides[1]/4 + in_y*dim_strides[2]/4 + batch*dim_strides[3]/4];   \n" \
 "                total.x += dot(input_value,localfilter[filter_y][filter_x]);   \n" \
 "                total.y += dot(input_value,localfilter[filter_y][filter_x + 8]);   \n" \
@@ -464,7 +446,7 @@ VkBuffer conv_matrixC = NULL;
 VkBuffer conv_matrixSizes = NULL;
 VkDeviceMemory conv_bufferMemory = NULL;
 
-int buffsizes[4] = {2100000, 2100000, 1024, 2100000};
+int buffsizes[4] = {4200000, 2100000, 1024, 4200000};
 
 // cl_mem cl_mem_arr[6], VkCommandPool conv_commandPool, VkCommandBuffer conv_commandBuffer, VkBuffer conv_matrixA, VkBuffer conv_matrixSizes, VkDeviceMemory conv_bufferMemory
 // cl_mem_arr,conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixSizes, conv_bufferMemory
@@ -1022,8 +1004,6 @@ void* ParseOpData(const Operator* op, BuiltinOperator op_type,
 
 void initOpenCL() {
   //OpenCL init
-  //note: andoird log
-  // __android_log_print(ANDROID_LOG_INFO, "Ngising", "masuk initOpenCL sekali");
 
   cl_int err;
 
@@ -1047,7 +1027,6 @@ void initOpenCL() {
 
   size_t wgsize;
   clGetKernelWorkGroupInfo(kernel_matmulblock, device_id, CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &wgsize, NULL);
-  __android_log_print(ANDROID_LOG_INFO, "Ngising", "runkernelwgsizematmulblock: %d",wgsize);
 
   // size_t prefWorkGroupSize1, prefWorkGroupSize2, prefWorkGroupSize3;
   // size_t maxWorkGroupSize1, maxWorkGroupSize2, maxWorkGroupSize3;
@@ -1070,9 +1049,6 @@ void initOpenCL() {
   //   &prefWorkGroupSize3,
   //   NULL);
   // //note: andoird log
-  // __android_log_print(ANDROID_LOG_INFO, "Ngising", "Workgroup transpose: %d",prefWorkGroupSize1);
-  // __android_log_print(ANDROID_LOG_INFO, "Ngising", "Workgroup conv: %d",prefWorkGroupSize2);
-  // __android_log_print(ANDROID_LOG_INFO, "Ngising", "Workgroup matrixVectorMul: %d",prefWorkGroupSize3);
   // clGetKernelWorkGroupInfo(kernel_transpose,
   //   device_id,
   //   CL_KERNEL_WORK_GROUP_SIZE,
@@ -1106,9 +1082,6 @@ void initOpenCL() {
 
   // }
   //note: andoird log
-  // __android_log_print(ANDROID_LOG_INFO, "Ngising", "MAX Workgroup transpose: %d",maxWorkGroupSize1);
-  // __android_log_print(ANDROID_LOG_INFO, "Ngising", "MAX Workgroup conv: %d",maxWorkGroupSize2);
-  // __android_log_print(ANDROID_LOG_INFO, "Ngising", "MAX Workgroup matrixVectorMul: %d",maxWorkGroupSize3);
 }
 
 //Vulkan
@@ -1879,7 +1852,6 @@ TfLiteStatus InterpreterBuilder::ParseNodes(
             conv_commandPool, conv_commandBuffer, conv_matrixA, conv_matrixB, conv_matrixC, conv_matrixSizes, conv_bufferMemory);
       } else {
         //note: andoird log
-        // __android_log_print(ANDROID_LOG_INFO, "Ngising", "addnodewithparam2");
         // std::vector<int> vectmp = FlatBufferIntArrayToVector(op->inputs());
         // std::vector<int> vectmp2 = FlatBufferIntArrayToVector(op->outputs());
         // __android_log_print(ANDROID_LOG_INFO, "VectorSize", "InputSizeModel.cc: %d, %d, %d", vectmp[0], vectmp[1], vectmp[2]);
@@ -1897,7 +1869,6 @@ TfLiteStatus InterpreterBuilder::ParseNodes(
     else {
       if (op->custom_options()) {
         //note: andoird log
-        // __android_log_print(ANDROID_LOG_INFO, "Ngising", "addnodewithparam1");
         interpreter->AddNodeWithParameters(
             FlatBufferIntArrayToVector(op->inputs()),
             FlatBufferIntArrayToVector(op->outputs()),
@@ -1905,7 +1876,6 @@ TfLiteStatus InterpreterBuilder::ParseNodes(
             op->custom_options()->size(), nullptr, reg);
       } else {
         //note: andoird log
-        // __android_log_print(ANDROID_LOG_INFO, "Ngising", "addnodewithparam2");
         interpreter->AddNodeWithParameters(
             FlatBufferIntArrayToVector(op->inputs()),
             FlatBufferIntArrayToVector(op->outputs()), nullptr, 0,

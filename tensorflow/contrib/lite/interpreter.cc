@@ -259,7 +259,6 @@ TfLiteStatus Interpreter::AddNodeWithParametersOpenCL(
   node.inputs = convertVectorToTfLiteIntArray(inputs);
   node.outputs = convertVectorToTfLiteIntArray(outputs);
   node.temporaries = TfLiteIntArrayCreate(0);
-  __android_log_print(ANDROID_LOG_INFO, "Ngising", "masuk interpreter");
   if (init_data) {
     node.user_data = OpInitOpenCL(*registration, init_data, init_data_size, context_cl, queue, program, cl_mem_arr,
       physicalDevice, device, pipelineConv, pipelineMatmul, pipelineLayoutConv, pipelineLayoutMatmul, pipelineConvMatmul, pipelineLayoutConvMatmul, descriptorSetLayoutConv, 

@@ -177,7 +177,6 @@ void* Init(TfLiteContext* context, const char* buffer, size_t length) {
   // clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
 
   //note: andoird log
-  // __android_log_print(ANDROID_LOG_INFO, "Ngising", "fcinitbiasa");
 
   gemm_support::IncrementUsageCounter(context);
   return new OpData;
@@ -242,7 +241,6 @@ void* InitOpenCL(TfLiteContext* context, const char* buffer, size_t length,
   conv_bufferMemory_global = conv_bufferMemory;
 
   //note: andoird log
-  // __android_log_print(ANDROID_LOG_INFO, "Ngising", "fcinit");
 
   gemm_support::IncrementUsageCounter(context);
   return new OpData;
@@ -333,18 +331,17 @@ TfLiteStatus EvalPie(TfLiteContext* context, TfLiteNode* node,
   }
 
   //note: andoird log
-  // __android_log_print(ANDROID_LOG_INFO, "Ngisin", "fcmatmul");
   // Compute output += weight * input
-  tensor_utils::MatrixBatchVectorMultiplyAccumulate(
-      filter->data.f, num_units, input_size, input->data.f, batch_size,
-      output->data.f, /*result_stride=*/1);
-
-  // tensor_utils::MatrixBatchVectorMultiplyAccumulateOpenCL(
+  // tensor_utils::MatrixBatchVectorMultiplyAccumulate(
   //     filter->data.f, num_units, input_size, input->data.f, batch_size,
-  //     output->data.f, /*result_stride=*/1, context_cl_global, queue_global, program_global, cl_mem_arr_global,
-  //     physicalDevice_global, device_global, pipelineConv_global, pipelineMatmul_global, pipelineLayoutConv_global, 
-  //       pipelineLayoutMatmul_global, descriptorSetLayoutConv_global, descriptorSetLayoutMatmul_global, queueV_global, queueFamilyIndex_global,
-  //       conv_commandPool_global, conv_commandBuffer_global, conv_matrixA_global, conv_matrixB_global, conv_matrixC_global, conv_matrixSizes_global, conv_bufferMemory_global);
+  //     output->data.f, /*result_stride=*/1);
+
+  tensor_utils::MatrixBatchVectorMultiplyAccumulateOpenCL(
+      filter->data.f, num_units, input_size, input->data.f, batch_size,
+      output->data.f, /*result_stride=*/1, context_cl_global, queue_global, program_global, cl_mem_arr_global,
+      physicalDevice_global, device_global, pipelineConv_global, pipelineMatmul_global, pipelineLayoutConv_global, 
+        pipelineLayoutMatmul_global, descriptorSetLayoutConv_global, descriptorSetLayoutMatmul_global, queueV_global, queueFamilyIndex_global,
+        conv_commandPool_global, conv_commandBuffer_global, conv_matrixA_global, conv_matrixB_global, conv_matrixC_global, conv_matrixSizes_global, conv_bufferMemory_global);
 
   // Apply activation function
   tensor_utils::ApplyActivationToVector(output->data.f, batch_size * num_units,
@@ -376,7 +373,6 @@ TfLiteStatus EvalQuantized(TfLiteContext* context, TfLiteNode* node,
   int32_t output_offset = output->params.zero_point;
 
   //  //note: andoird log
-  // __android_log_print(ANDROID_LOG_INFO, "Ngisin", "fcmatmul2");
 #define TF_LITE_FULLY_CONNECTED(type)                                       \
   type::FullyConnected(                                                     \
       GetTensorData<uint8_t>(input), GetTensorDims(input), input_offset,    \
