@@ -275,8 +275,6 @@ cc_library(
         "optimized/tensor_utils_impl.h",
         "CL/cl_platform.h",
         "CL/cl.h",
-        "vulkan/vk_platform.h",
-        "vulkan/vulkan.h",
     ],
     copts = NEON_FLAGS_IF_APPLICABLE,
     deps = [

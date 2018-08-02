@@ -21,21 +21,12 @@ limitations under the License.
 #include <iostream>
 #include <limits>
 
-//note: android log
 #include <android/log.h> 
 #include <stdio.h> 
 #include <stdlib.h> 
 #include <math.h>
 
-//note: android opencl
 #include "CL/cl.h"
-
-//note: vulkan
-#include "vulkan/vulkan.h"
-// #include "vulkan/vk_platform.h"
-
-//note: shaderc
-// #include "shaderc/shaderc.hpp"
 
 #include "tensorflow/contrib/lite/builtin_op_data.h"
 #include "tensorflow/contrib/lite/context.h"
@@ -82,129 +73,21 @@ cl_context context_cl_global = NULL;
 cl_command_queue queue_global = NULL;
 cl_program program_global = NULL;
 cl_mem cl_mem_arr_global[6];
-// cl_mem d_conv_input_global = NULL;
-// cl_mem d_conv_filter_global = NULL;
-// cl_mem d_conv_bias_global = NULL;
-// cl_mem d_conv_output_global = NULL;
-// cl_mem d_conv_dim_sizes_global = NULL;
-// cl_mem d_conv_dim_strides_global = NULL;
-
-VkPhysicalDevice physicalDevice_global = NULL;
-VkDevice device_global = NULL;
-VkPipeline pipelineConv_global = NULL;
-VkPipeline pipelineMatmul_global = NULL;
-VkPipelineLayout pipelineLayoutMatmul_global = NULL;
-VkPipelineLayout pipelineLayoutConv_global = NULL;
-VkDescriptorSetLayout descriptorSetLayoutMatmul_global = NULL;
-VkDescriptorSetLayout descriptorSetLayoutConv_global = NULL;
-VkQueue queueV_global = NULL; 
-uint32_t queueFamilyIndex_global = 0;
-VkCommandPool conv_commandPool_global = NULL;
-VkCommandBuffer conv_commandBuffer_global = NULL;
-VkBuffer conv_matrixA_global = NULL;
-VkBuffer conv_matrixB_global = NULL;
-VkBuffer conv_matrixC_global = NULL;
-VkBuffer conv_matrixSizes_global = NULL;
-VkDeviceMemory conv_bufferMemory_global = NULL;
-
-// const char *kernelSource =           "\n" \
-// "__kernel void matrixVectorMul(__global float* C,  \n" \
-// "                      const __global float* A,  \n" \
-// "                      const __global float* B,  \n" \
-// "                      int K, int M, int N) {  \n" \
-// "      \n" \
-// "    const int row = get_local_id(0); // Local row ID (max: 32)  \n" \
-// "    const int col = get_local_id(1); // Local col ID (max: 32)  \n" \
-// "    const int globalRow = 32*get_group_id(0) + row; // Row ID of C (0..M)  \n" \
-// "    const int globalCol = 32*get_group_id(1) + col; // Col ID of C (0..N)  \n" \
-// "   \n" \
-// "      __local float Asub[32][32];  \n" \
-// "      __local float Bsub[32][32];  \n" \
-// "     \n" \
-// "      float acc = 0.0;  \n" \
-// "        \n" \
-// "      const int numTiles = ((K-1)/32)+1;  \n" \
-// "      for (int t=0; t<numTiles; t++) {  \n" \
-// "     \n" \
-// "          const int tiledRow = 32*t + row;  \n" \
-// "          const int tiledCol = 32*t + col;  \n" \
-// "          if((tiledCol < K) && (globalRow < M)) { \n" \
-// "            Asub[col][row] = A[globalRow*K + tiledCol];  \n" \
-// "          }   \n" \
-// "          else {    \n" \
-// "            Asub[col][row] = 0.0;  \n" \
-// "          }   \n" \
-// "          if((tiledRow < K) && (globalCol < N)) { \n" \
-// "            Bsub[col][row] = B[globalCol*K + tiledRow];  \n" \
-// "          }   \n" \
-// "          else {    \n" \
-// "            Bsub[col][row] = 0.0;  \n" \
-// "          }   \n" \
-// "     \n" \
-// "          barrier(CLK_LOCAL_MEM_FENCE);  \n" \
-// "     \n" \
-// "          for (int k=0; k<32; k++) {  \n" \
-// "              acc += Asub[k][row] * Bsub[col][k];  \n" \
-// "          }  \n" \
-// "     \n" \
-// "          barrier(CLK_LOCAL_MEM_FENCE);  \n" \
-// "      }  \n" \
-// "     \n" \
-// "      if((globalRow < M) && (globalCol < N)) {  \n" \
-// "          C[globalCol*M + globalRow] = acc;  \n" \
-// "      } \n" \
-// "} \n" \ 
-// "\n";
 
 void* Init(TfLiteContext* context, const char* buffer, size_t length) {
   // This is a builtin op, so we don't use the contents in 'buffer', if any.
   // Instead, we allocate a new object to carry information from Prepare() to
   // Eval().
 
-  // cl_int err;
-
-  // err = clGetPlatformIDs(1, &cpPlatform, NULL);
- 
-  // err = clGetDeviceIDs(cpPlatform, CL_DEVICE_TYPE_GPU, 1, &device_id, NULL);
-
-  // context_cl = clCreateContext(0, 1, &device_id, NULL, NULL, &err);
-
-  // queue = clCreateCommandQueue(context_cl, device_id, 0, &err);
-
-  // program = clCreateProgramWithSource(context_cl, 1,
-  //                         (const char **) & kernelSource, NULL, &err);
-
-  // clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
-
-  //note: andoird log
-
   gemm_support::IncrementUsageCounter(context);
   return new OpData;
 }
 
 void* InitOpenCL(TfLiteContext* context, const char* buffer, size_t length,
-  cl_context context_cl, cl_command_queue queue, cl_program program, cl_mem cl_mem_arr[6],
-  VkPhysicalDevice physicalDevice, VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, VkPipeline pipelineConvMatmul, VkPipelineLayout pipelineLayoutConvMatmul,
-    VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex,
-    VkCommandPool conv_commandPool, VkCommandBuffer conv_commandBuffer, VkBuffer conv_matrixA, VkBuffer conv_matrixB, VkBuffer conv_matrixC, VkBuffer conv_matrixSizes, VkDeviceMemory conv_bufferMemory) {
+  cl_context context_cl, cl_command_queue queue, cl_program program, cl_mem cl_mem_arr[6]) {
   // This is a builtin op, so we don't use the contents in 'buffer', if any.
   // Instead, we allocate a new object to carry information from Prepare() to
   // Eval().
-
-  // cl_int err;
-
-  // err = clGetPlatformIDs(1, &cpPlatform, NULL);
- 
-  // err = clGetDeviceIDs(cpPlatform, CL_DEVICE_TYPE_GPU, 1, &device_id, NULL);
-
-  // context_cl = clCreateContext(0, 1, &device_id, NULL, NULL, &err);
-
-  // queue = clCreateCommandQueue(context_cl, device_id, 0, &err);
-
-  // program = clCreateProgramWithSource(context_cl, 1,
-  //                         (const char **) & kernelSource, NULL, &err);
-
-  // clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
 
   context_cl_global = context_cl;
   program_global = program;
@@ -215,32 +98,6 @@ void* InitOpenCL(TfLiteContext* context, const char* buffer, size_t length,
   cl_mem_arr_global[3] = cl_mem_arr[3];
   cl_mem_arr_global[4] = cl_mem_arr[4];
   cl_mem_arr_global[5] = cl_mem_arr[5];
-  // d_conv_input_global = cl_mem_arr[0];
-  // d_conv_filter_global = cl_mem_arr[1];
-  // d_conv_bias_global = cl_mem_arr[2];
-  // d_conv_output_global = cl_mem_arr[3];
-  // d_conv_dim_sizes_global = cl_mem_arr[4];
-  // d_conv_dim_strides_global = cl_mem_arr[5];
-
-  physicalDevice_global = physicalDevice; 
-  device_global = device;
-  pipelineConv_global = pipelineConv;
-  pipelineMatmul_global = pipelineMatmul;
-  pipelineLayoutMatmul_global = pipelineLayoutMatmul;
-  pipelineLayoutConv_global = pipelineLayoutConv;
-  descriptorSetLayoutMatmul_global = descriptorSetLayoutMatmul;
-  descriptorSetLayoutConv_global = descriptorSetLayoutConv;
-  queueV_global = queueV; 
-  queueFamilyIndex_global = queueFamilyIndex;
-  conv_commandPool_global = conv_commandPool;
-  conv_commandBuffer_global = conv_commandBuffer;
-  conv_matrixA_global = conv_matrixA;
-  conv_matrixB_global = conv_matrixB;
-  conv_matrixC_global = conv_matrixC;
-  conv_matrixSizes_global = conv_matrixSizes;
-  conv_bufferMemory_global = conv_bufferMemory;
-
-  //note: andoird log
 
   gemm_support::IncrementUsageCounter(context);
   return new OpData;
@@ -249,9 +106,6 @@ void* InitOpenCL(TfLiteContext* context, const char* buffer, size_t length,
 void Free(TfLiteContext* context, void* buffer) {
   gemm_support::DecrementUsageCounter(context);
   delete reinterpret_cast<OpData*>(buffer);
-  // clReleaseProgram(program);
-  // clReleaseCommandQueue(queue);
-  // clReleaseContext(context_cl);
 }
 
 TfLiteStatus Prepare(TfLiteContext* context, TfLiteNode* node) {
@@ -330,7 +184,6 @@ TfLiteStatus EvalPie(TfLiteContext* context, TfLiteNode* node,
     tensor_utils::ZeroVector(output->data.f, batch_size * num_units);
   }
 
-  //note: andoird log
   // Compute output += weight * input
   // tensor_utils::MatrixBatchVectorMultiplyAccumulate(
   //     filter->data.f, num_units, input_size, input->data.f, batch_size,
@@ -338,10 +191,7 @@ TfLiteStatus EvalPie(TfLiteContext* context, TfLiteNode* node,
 
   tensor_utils::MatrixBatchVectorMultiplyAccumulateOpenCL(
       filter->data.f, num_units, input_size, input->data.f, batch_size,
-      output->data.f, /*result_stride=*/1, context_cl_global, queue_global, program_global, cl_mem_arr_global,
-      physicalDevice_global, device_global, pipelineConv_global, pipelineMatmul_global, pipelineLayoutConv_global, 
-        pipelineLayoutMatmul_global, descriptorSetLayoutConv_global, descriptorSetLayoutMatmul_global, queueV_global, queueFamilyIndex_global,
-        conv_commandPool_global, conv_commandBuffer_global, conv_matrixA_global, conv_matrixB_global, conv_matrixC_global, conv_matrixSizes_global, conv_bufferMemory_global);
+      output->data.f, /*result_stride=*/1, context_cl_global, queue_global, program_global, cl_mem_arr_global);
 
   // Apply activation function
   tensor_utils::ApplyActivationToVector(output->data.f, batch_size * num_units,
@@ -372,7 +222,6 @@ TfLiteStatus EvalQuantized(TfLiteContext* context, TfLiteNode* node,
   int32_t filter_offset = -filter->params.zero_point;
   int32_t output_offset = output->params.zero_point;
 
-  //  //note: andoird log
 #define TF_LITE_FULLY_CONNECTED(type)                                       \
   type::FullyConnected(                                                     \
       GetTensorData<uint8_t>(input), GetTensorDims(input), input_offset,    \

@@ -17,10 +17,6 @@ limitations under the License.
 //note: android opencl
 #include "CL/cl.h"
 
-//note: vulkan
-#include "vulkan/vulkan.h"
-// #include "vulkan/vk_platform.h"
-
 //note: shaderc
 // #include "shaderc/shaderc.hpp"
 
@@ -30,9 +26,9 @@ limitations under the License.
 #endif  //  defined(__ARM_NEON__) || defined(__ARM_NEON)
 #endif  //  USE_NEON
 
-#ifdef USE_NEON
+// #ifdef USE_NEON
 #include "tensorflow/contrib/lite/kernels/internal/optimized/neon_tensor_utils.h"
 // #include "tensorflow/contrib/lite/kernels/internal/reference/portable_tensor_utils.h"
-#else
-#include "tensorflow/contrib/lite/kernels/internal/reference/portable_tensor_utils.h"
-#endif  // USE_NEON
+// #else
+// #include "tensorflow/contrib/lite/kernels/internal/reference/portable_tensor_utils.h"
+// #endif  // USE_NEON

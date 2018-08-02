@@ -34,10 +34,6 @@ limitations under the License.
 //note: android opencl
 #include "CL/cl.h"
 
-//note: vulkan
-#include "vulkan/vulkan.h"
-// #include "vulkan/vk_platform.h"
-
 //note: shaderc
 // #include "shaderc/shaderc.hpp"
 // include shader bermasalah
@@ -297,10 +293,7 @@ typedef struct {
   TfLiteStatus (*invoke)(TfLiteContext* context, TfLiteNode* node);
 
   void* (*initopencl)(TfLiteContext* context, const char* buffer, size_t length, 
-                        cl_context context_cl, cl_command_queue queue, cl_program program, cl_mem cl_mem_arr[6],
-                        VkPhysicalDevice physicalDevice, VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, VkPipeline pipelineConvMatmul, VkPipelineLayout pipelineLayoutConvMatmul,  
-    VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex,
-    VkCommandPool conv_commandPool, VkCommandBuffer conv_commandBuffer, VkBuffer conv_matrixA, VkBuffer conv_matrixB, VkBuffer conv_matrixC, VkBuffer conv_matrixSizes, VkDeviceMemory conv_bufferMemory);
+                        cl_context context_cl, cl_command_queue queue, cl_program program, cl_mem cl_mem_arr[6]);
 
   // Builtin codes. If this kernel refers to a builtin this is the code
   // of the builtin. This is so we can do marshaling to other frameworks like

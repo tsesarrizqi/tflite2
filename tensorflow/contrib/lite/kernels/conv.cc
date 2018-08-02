@@ -21,28 +21,16 @@ limitations under the License.
 #include <iostream>
 #include <limits>
 
-//note: android log
 #include <android/log.h> 
 #include <stdio.h> 
 #include <stdlib.h> 
 #include <math.h>
 
-//note: android opencl
 #include "CL/cl.h"
-// #include <jni.h>
 #include <string.h>
-// #include <android/log.h>
 
-// note: timer
 #include <time.h>
 #include <sys/time.h>
-
-//note: vulkan
-#include "vulkan/vulkan.h"
-// #include "vulkan/vk_platform.h"
-
-//note: shaderc
-// #include "shaderc/shaderc.hpp"
 
 #define MEM_SIZE (128)
 
@@ -93,125 +81,13 @@ struct OpData {
   bool have_weights_been_transposed;
   bool need_im2col;
 };
-    
-// static int buffsizes[4] = {0,0,0,0};
+
 int buffsizes[4] = {4200000, 2100000, 1024, 4200000};
-
-// int buffsizes4[4] = {0,0,0,0};
-// inputSizeconv.cc: 710432
-// filterSizeconv.cc: 1548288
-// biasSizeconv.cc: 448
-// outputSizeconv.cc: 1382976
-
-// inputSizeconv.cc: 401408
-// filterSizeconv.cc: 1048576
-// biasSizeconv.cc: 1024
-// outputSizeconv.cc: 802816
 
 cl_context context_cl_global = NULL;       
 cl_command_queue queue_global = NULL;
 cl_program program_global = NULL;
 cl_mem cl_mem_arr_global[6];
-// cl_mem d_conv_input_global = NULL;
-// cl_mem d_conv_filter_global = NULL;
-// cl_mem d_conv_bias_global = NULL;
-// cl_mem d_conv_output_global = NULL;
-// cl_mem d_conv_dim_sizes_global = NULL;
-// cl_mem d_conv_dim_strides_global = NULL;
- 
-VkPhysicalDevice physicalDevice_global = NULL;
-VkDevice device_global = NULL;
-VkPipeline pipelineConv_global = NULL;
-VkPipeline pipelineMatmul_global = NULL;
-VkPipeline pipelineConvMatmul_global = NULL;
-VkPipelineLayout pipelineLayoutMatmul_global = NULL;
-VkPipelineLayout pipelineLayoutConv_global = NULL;
-VkPipelineLayout pipelineLayoutConvMatmul_global = NULL;
-VkDescriptorSetLayout descriptorSetLayoutMatmul_global = NULL;
-VkDescriptorSetLayout descriptorSetLayoutConv_global = NULL;
-VkQueue queueV_global = NULL; 
-uint32_t queueFamilyIndex_global = 0;
-VkCommandPool conv_commandPool_global = NULL;
-VkCommandBuffer conv_commandBuffer_global = NULL;
-VkBuffer conv_matrixA_global = NULL;
-VkBuffer conv_matrixB_global = NULL;
-VkBuffer conv_matrixC_global = NULL;
-VkBuffer conv_matrixSizes_global = NULL;
-VkDeviceMemory conv_bufferMemory_global = NULL;
-
-// const char *kernelSource_conv =           "\n" \
-// "__kernel void conv(__global float* input_data,   \n" \
-// "          __global float* filter_data,   \n" \
-// "          __global float* bias_data,   \n" \
-// "          __global float* output_data,  \n" \
-// "          int stride_width, int stride_height,   \n" \
-// "          int pad_width, int pad_height,   \n" \
-// "          __global int* dim_sizes, __global int* dim_strides,  \n" \
-// "          float output_activation_min, float output_activation_max) {  \n" \
-// "  int gid = get_global_id(0);  \n" \
-// "  const int batches = dim_sizes[3];  \n" \
-// "  const int input_depth = dim_sizes[0];  \n" \
-// "  const int output_depth = dim_sizes[7];  \n" \
-// "  int batch = gid/output_depth;  \n" \
-// "  int out_channel = gid%output_depth;  \n" \
-// "  if(gid < batches*output_depth) {  \n" \
-// "    const int input_height = dim_sizes[2];  \n" \
-// "    const int input_width = dim_sizes[1];  \n" \
-// "    const int filter_height = dim_sizes[6];  \n" \
-// "    const int filter_width = dim_sizes[5];  \n" \
-// "    const int output_height = dim_sizes[14];  \n" \
-// "    const int output_width = dim_sizes[13];  \n" \
-// "    for (int out_y = 0; out_y < output_height; ++out_y) {  \n" \
-// "      for (int out_x = 0; out_x < output_width; ++out_x) {  \n" \
-// "        const int in_x_origin = (out_x * stride_width) - pad_width;  \n" \
-// "        const int in_y_origin = (out_y * stride_height) - pad_height;  \n" \
-// "        float total = 0.f;  \n" \
-// "        for (int filter_y = 0; filter_y < filter_height; ++filter_y) {  \n" \
-// "          for (int filter_x = 0; filter_x < filter_width; ++filter_x) {  \n" \
-// "            for (int in_channel = 0; in_channel < input_depth; ++in_channel) {  \n" \
-// "              const int in_x = in_x_origin + filter_x;  \n" \
-// "              const int in_y = in_y_origin + filter_y;  \n" \
-// "              if ((in_x >= 0) && (in_x < input_width) && (in_y >= 0) &&  \n" \
-// "                  (in_y < input_height)) {  \n" \
-// "                float input_value = input_data[in_channel*dim_strides[0] + in_x*dim_strides[1] +   \n" \
-// "                                                in_y*dim_strides[2] + batch*dim_strides[3]];  \n" \
-// "                float filter_value =  \n" \
-// "                    filter_data[in_channel*dim_strides[4] + filter_x*dim_strides[5] +  \n" \
-// "                                       filter_y*dim_strides[6] + out_channel*dim_strides[7]];  \n" \
-// "                total += (input_value * filter_value);  \n" \
-// "              }  \n" \
-// "            }  \n" \
-// "          }  \n" \
-// "        }  \n" \
-// "        float bias_value = 0.0f;  \n" \
-// "        if (bias_data) {  \n" \
-// "          bias_value = bias_data[out_channel*dim_strides[8]];  \n" \
-// "        }  \n" \
-// "        float max = total+bias_value; \n" \
-// "        if(max < output_activation_min) max = output_activation_min; \n" \
-// "        float min = max; \n" \
-// "        if(min > output_activation_max) min = output_activation_max; \n" \
-// "        output_data[out_channel*dim_strides[12] + out_x*dim_strides[13] +   \n" \
-// "                     out_y*dim_strides[14] + batch*dim_strides[15]] = min; \n" \
-// "      }  \n" \
-// "    }  \n" \
-// "  }  \n" \
-// "}  \n" \
-// "\n";
-
-const char *kernelSource_transpose =           "\n" \                               
-"__kernel void transpose(__global float* input, __global float* output, \n" \
-"    int rows, int cols) {          \n" \
-"   int gid = get_global_id(0);                                       \n" \
-"  \n" \
-"   if(gid < rows*cols) {                                                    \n" \
-"      int i = gid/cols; \n" \
-"      int j = gid%cols;   \n" \
-"      const float in_value = input[gid]; \n" \
-"      output[j*rows + i] = in_value; \n" \
-"   }                                                                 \n" \
-"} \n" \                                                                    
-"\n";
 
 double get_wall_time(){
     struct timeval time;
@@ -235,17 +111,12 @@ void* Init(TfLiteContext* context, const char* buffer, size_t length) {
   context->AddTensors(context, 1, &data->im2col_id);
   context->AddTensors(context, 1, &data->hwcn_weights_id);
   gemm_support::IncrementUsageCounter(context);
-  //note: andoird log
-  // __android_log_print(ANDROID_LOG_INFO, "Convcc", "init conv");
 
   return data;
 }
 
 void* InitOpenCL(TfLiteContext* context, const char* buffer, size_t length,
-  cl_context context_cl, cl_command_queue queue, cl_program program, cl_mem cl_mem_arr[6],
-  VkPhysicalDevice physicalDevice, VkDevice device, VkPipeline pipelineConv, VkPipeline pipelineMatmul, VkPipelineLayout pipelineLayoutConv, VkPipelineLayout pipelineLayoutMatmul, VkPipeline pipelineConvMatmul, VkPipelineLayout pipelineLayoutConvMatmul, 
-    VkDescriptorSetLayout descriptorSetLayoutConv, VkDescriptorSetLayout descriptorSetLayoutMatmul, VkQueue queueV, uint32_t queueFamilyIndex,
-    VkCommandPool conv_commandPool, VkCommandBuffer conv_commandBuffer, VkBuffer conv_matrixA, VkBuffer conv_matrixB, VkBuffer conv_matrixC, VkBuffer conv_matrixSizes, VkDeviceMemory conv_bufferMemory) {
+  cl_context context_cl, cl_command_queue queue, cl_program program, cl_mem cl_mem_arr[6]) {
   // This is a builtin op, so we don't use the contents in 'buffer', if any.
   // Instead, we allocate a new object to use as scratch space for im2col, and
   // to carry information from Prepare() to Eval().
@@ -259,147 +130,29 @@ void* InitOpenCL(TfLiteContext* context, const char* buffer, size_t length,
   cl_mem_arr_global[3] = cl_mem_arr[3];
   cl_mem_arr_global[4] = cl_mem_arr[4];
   cl_mem_arr_global[5] = cl_mem_arr[5];
-  // d_conv_input_global = cl_mem_arr[0];
-  // d_conv_filter_global = cl_mem_arr[1];
-  // d_conv_bias_global = cl_mem_arr[2];
-  // d_conv_output_global = cl_mem_arr[3];
-  // d_conv_dim_sizes_global = cl_mem_arr[4];
-  // d_conv_dim_strides_global = cl_mem_arr[5];
-
-  physicalDevice_global = physicalDevice; 
-  device_global = device;
-  pipelineConv_global = pipelineConv;
-  pipelineMatmul_global = pipelineMatmul;
-  pipelineLayoutMatmul_global = pipelineLayoutMatmul;
-  pipelineLayoutConv_global = pipelineLayoutConv;
-  descriptorSetLayoutMatmul_global = descriptorSetLayoutMatmul;
-  descriptorSetLayoutConv_global = descriptorSetLayoutConv;
-  pipelineConvMatmul_global = pipelineConvMatmul;
-  pipelineLayoutConvMatmul_global = pipelineLayoutConvMatmul;
-  queueV_global = queueV; 
-  queueFamilyIndex_global = queueFamilyIndex;
-  conv_commandPool_global = conv_commandPool;
-  conv_commandBuffer_global = conv_commandBuffer;
-  conv_matrixA_global = conv_matrixA;
-  conv_matrixB_global = conv_matrixB;
-  conv_matrixC_global = conv_matrixC;
-  conv_matrixSizes_global = conv_matrixSizes;
-  conv_bufferMemory_global = conv_bufferMemory;
-
-  // //OpenCL init
-  // cl_int err;
-
-  // err = clGetPlatformIDs(1, &cpPlatform, NULL);
- 
-  // err = clGetDeviceIDs(cpPlatform, CL_DEVICE_TYPE_GPU, 1, &device_id, NULL);
-
-  // context_cl = clCreateContext(0, 1, &device_id, NULL, NULL, &err);
-
-  // queue = clCreateCommandQueue(context_cl, device_id, 0, &err);
-
-  // program = clCreateProgramWithSource(context_cl, 1,
-  //                         (const char **) & kernelSource_conv, NULL, &err);
-
-  // clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
 
   auto* data = new OpData;
   context->AddTensors(context, 1, &data->im2col_id);
   context->AddTensors(context, 1, &data->hwcn_weights_id);
   gemm_support::IncrementUsageCounter(context);
-  // //note: andoird log
-  // __android_log_print(ANDROID_LOG_INFO, "Convcc", "init conv");
-
-  // clTest();
 
   return data;
 }
 
 void Free(TfLiteContext* context, void* buffer) {
-  // clReleaseProgram(program);
-  // clReleaseCommandQueue(queue);
-  // clReleaseContext(context_cl);
   gemm_support::DecrementUsageCounter(context);
   delete reinterpret_cast<OpData*>(buffer);
 }
-
-
-// void OpenCLTransposeFloatTensor(const float* input, const int rows, const int cols, float* output) {
-//   cl_mem d_a;
-//   cl_mem d_b;
-
-//   // cl_platform_id cpPlatform;
-//   // cl_device_id device_id;    
-//   // cl_context context;       
-//   // cl_command_queue queue;   
-//   // cl_program program;       
-//   cl_kernel kernel;
-
-//   size_t globalSize, localSize;
-//   localSize = 32;
-//   globalSize = ceil(batches*output_depth/(localSize*1.0))*localSize;
-
-//   cl_int err;
-
-//   // err = clGetPlatformIDs(1, &cpPlatform, NULL);
- 
-//   // err = clGetDeviceIDs(cpPlatform, CL_DEVICE_TYPE_GPU, 1, &device_id, NULL);
-
-//   // context = clCreateContext(0, 1, &device_id, NULL, NULL, &err);
-
-//   // queue = clCreateCommandQueue(context, device_id, 0, &err);
-
-//   // program = clCreateProgramWithSource(context, 1,
-//   //                         (const char **) & kernelSource, NULL, &err);
-
-//   // clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
-
-//   kernel = clCreateKernel(program, "transpose", &err);
-
-//   d_a = clCreateBuffer(context, CL_MEM_READ_ONLY, rows*cols*sizeof(float), NULL, NULL);
-//   d_b = clCreateBuffer(context, CL_MEM_WRITE_ONLY, rows*cols*sizeof(float), NULL, NULL);
-
-//   err = clEnqueueWriteBuffer(queue, d_a, CL_TRUE, 0,
-//                                  rows*cols*sizeof(float), input, 0, NULL, NULL);
-
-//   err  = clSetKernelArg(kernel, 0, sizeof(cl_mem), &d_a);
-//   err  = clSetKernelArg(kernel, 1, sizeof(cl_mem), &d_b);
-//   err  = clSetKernelArg(kernel, 2, sizeof(int), &rows);
-//   err  = clSetKernelArg(kernel, 3, sizeof(int), &cols);
-
-//   err = clEnqueueNDRangeKernel(queue, kernel, 1, NULL, &globalSize, &localSize, 0, NULL, NULL);
-
-//   clFinish(queue);
-
-//   clEnqueueReadBuffer(queue, d_b, CL_TRUE, 0, rows*cols*sizeof(float), output, 0, NULL, NULL );
-
-//   clReleaseMemObject(d_a);
-//   clReleaseMemObject(d_b);
-//   clReleaseProgram(program);
-//   clReleaseKernel(kernel);
-//   clReleaseCommandQueue(queue);
-//   clReleaseContext(context);
-// }
-
 
 // Naive implementation of transpose for floats. Could be optimized to be more
 // cache friendly, but for now it's a one-time cost on first run, and we would
 // prefer to remove the need to do this at all eventually.
 void TransposeFloatTensor(TfLiteTensor* input, TfLiteTensor* output) {
-  // //note: andoird log
-  // __android_log_print(ANDROID_LOG_INFO, "CobaLog", "transpose conv");
   const int rows = output->dims->data[1];
   const int cols = output->dims->data[0];
   const float* input_data = GetTensorData<float>(input);
   float* output_data = GetTensorData<float>(output);
 
-  // Start Timers
-  // double wall0 = get_wall_time();
-  // double cpu0  = get_cpu_time();
-
-  // //OpenCL
-  // OpenCLTransposeFloatTensor(input_data,rows,cols,output_data);
-
-  // Naive
   for (int i = 0; i < rows; ++i) {
     for (int j = 0; j < cols; ++j) {
       const float in_value = input_data[i * cols + j];
@@ -407,15 +160,6 @@ void TransposeFloatTensor(TfLiteTensor* input, TfLiteTensor* output) {
     }
   }
 
-  // Stop timers
-  // double wall1 = get_wall_time();
-  // double cpu1  = get_cpu_time();
-
-  // double wall = wall1 - wall0;
-  // double cpu = cpu1 - cpu0;
-
-  // // note: andoird log
-  // __android_log_print(ANDROID_LOG_INFO, "Transposeruntime", "Walltime: %lf", wall);
 }
 
 TfLiteStatus Prepare(TfLiteContext* context, TfLiteNode* node) {
@@ -441,18 +185,6 @@ TfLiteStatus Prepare(TfLiteContext* context, TfLiteNode* node) {
   int filter_size1 = filter->dims->data[0]*filter->dims->data[1]*filter->dims->data[2]*numchannel;
   int output_size1 = output->dims->data[0]*output->dims->data[1]*output->dims->data[2]*output->dims->data[3];
 
-  // if(buffsizes4[0] < input_size1) {
-  //   buffsizes4[0] = input_size1;
-  // }
-  // if(buffsizes4[1] < filter_size1) {
-  //   buffsizes4[1] = filter_size1;
-  // }
-  // if(buffsizes4[3] < output_size1) {
-  //   buffsizes4[3] = output_size1;
-  // }
-
-
-
   // Check types. (We assume that UINT8 refers to quantized tensors)
   TfLiteType data_type = input->type;
   TF_LITE_ENSURE(context,
@@ -476,20 +208,11 @@ TfLiteStatus Prepare(TfLiteContext* context, TfLiteNode* node) {
       TF_LITE_ENSURE_EQ(context, bias->type, data_type);
     }
 
-    bias_size = bias->dims->data[0];
-    // if(buffsizes4[2] < bias_size) {
-    //   buffsizes4[2] = bias_size;
-    // }
-    
+    bias_size = bias->dims->data[0];  
 
     TF_LITE_ENSURE_EQ(context, bias->dims->size, 1);
     TF_LITE_ENSURE_EQ(context, bias->dims->data[0], filter->dims->data[0]);
   }
-
-  // __android_log_print(ANDROID_LOG_INFO, "VectorSize", "inputSizeconv.cc: %d",buffsizes4[0]);
-  // __android_log_print(ANDROID_LOG_INFO, "VectorSize", "filterSizeconv.cc: %d",buffsizes4[1]);
-  // __android_log_print(ANDROID_LOG_INFO, "VectorSize", "biasSizeconv.cc: %d",buffsizes4[2]);
-  // __android_log_print(ANDROID_LOG_INFO, "VectorSize", "outputSizeconv.cc: %d",buffsizes4[3]);
 
   int channels_out = filter->dims->data[0];
   int width = input->dims->data[2];
@@ -671,7 +394,6 @@ void EvalFloat(TfLiteContext* context, TfLiteNode* node,
                                 &output_activation_max);
 
   if (kernel_type == kReference) {
-    // __android_log_print(ANDROID_LOG_INFO, "Convcc", "reference conv");
     reference_ops::Conv(GetTensorData<float>(input), GetTensorDims(input),
                         GetTensorData<float>(filter), GetTensorDims(filter),
                         GetTensorData<float>(bias), GetTensorDims(bias),
@@ -687,8 +409,7 @@ void EvalFloat(TfLiteContext* context, TfLiteNode* node,
     } else {
       filter_data = GetTensorData<float>(filter);
     }
-    //note: andoird log
-    // // __android_log_print(ANDROID_LOG_INFO, "Convcc", "multithread conv");
+
     // multithreaded_ops::Conv(
     //     GetTensorData<float>(input), GetTensorDims(input), filter_data,
     //     GetTensorDims(filter), GetTensorData<float>(bias), GetTensorDims(bias),
@@ -705,10 +426,7 @@ void EvalFloat(TfLiteContext* context, TfLiteNode* node,
         output_activation_max, GetTensorData<float>(output),
         GetTensorDims(output), GetTensorData<float>(im2col),
         GetTensorDims(im2col),
-        context_cl_global, queue_global, program_global, cl_mem_arr_global, buffsizes,
-        physicalDevice_global, device_global, pipelineConv_global, pipelineMatmul_global, pipelineLayoutConv_global, 
-        pipelineLayoutMatmul_global, pipelineConvMatmul_global, pipelineLayoutConvMatmul_global, descriptorSetLayoutConv_global, descriptorSetLayoutMatmul_global, queueV_global, queueFamilyIndex_global,
-        conv_commandPool_global, conv_commandBuffer_global, conv_matrixA_global, conv_matrixB_global, conv_matrixC_global, conv_matrixSizes_global, conv_bufferMemory_global);
+        context_cl_global, queue_global, program_global, cl_mem_arr_global);
     
   }
 }
