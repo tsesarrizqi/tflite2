@@ -98,6 +98,9 @@ void transpose_block(const float *A, float *B, const int n, const int m, const i
 using half_float::half;
 using half_float::half_cast;
 
+size_t matmulWgHeight = 8;
+size_t matmulWgWidth = 32;
+
 void OpenCLPortableMatrixBatchVectorMultiplyAccumulate(const float* matrix,
                                                  int m_rows, int m_cols,
                                                  const float* vector,
@@ -171,8 +174,8 @@ void OpenCLPortableMatrixBatchVectorMultiplyAccumulate(const float* matrix,
   err  = clSetKernelArg(kernel, 4, sizeof(int), &m_cols);
   err  = clSetKernelArg(kernel, 5, sizeof(int), &n_batch);
 
-  const size_t local[2] = { 8, 32 };
-  const size_t global[2] = { (size_t) ((d_n_batch/4-1)/8+1)*8, (size_t) ((m_rows-1)/32+1)*32 };
+  const size_t local[2] = { matmulWgHeight, matmulWgWidth };
+  const size_t global[2] = { (size_t) ((d_n_batch/4-1)/matmulWgHeight+1)*matmulWgHeight, (size_t) ((m_rows-1)/matmulWgWidth+1)*matmulWgWidth };
 
   err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global, local, 0, NULL, NULL);
 

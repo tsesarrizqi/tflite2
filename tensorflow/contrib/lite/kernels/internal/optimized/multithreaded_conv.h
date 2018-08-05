@@ -213,10 +213,12 @@ class EigenTensorConvFunctor {
   }
 };
 
-static cl_kernel kernellocalall = NULL;
-static cl_kernel kernellocalfilter = NULL;
-static cl_kernel kernelmatmul = NULL;
-static cl_kernel kernelconv = NULL;
+static cl_kernel kernelconvFilterAndImageCache = NULL;
+static cl_kernel kernelmatmulInputCache = NULL;
+size_t convWgHeight = 8;
+size_t convWgWidth = 16;
+size_t matmulWgHeight = 8;
+size_t matmulWgWidth = 32;
 
 inline void OpenCLConv(const float* input_data, int input_size,
           const float* filter_data, int filter_size,
@@ -325,17 +327,17 @@ inline void OpenCLConv(const float* input_data, int input_size,
     int n_batch = dim_sizes[7];
     int bias_stride = dim_strides[8];
 
-    err  = clSetKernelArg(kernelmatmul, 0, sizeof(cl_mem), &d_input);
-    err  = clSetKernelArg(kernelmatmul, 1, sizeof(cl_mem), &d_filter);
-   err  = clSetKernelArg(kernelmatmul, 2, sizeof(cl_mem), &d_output);
-    err  = clSetKernelArg(kernelmatmul, 3, sizeof(int), &m_rows);
-    err  = clSetKernelArg(kernelmatmul, 4, sizeof(int), &m_cols);
-    err  = clSetKernelArg(kernelmatmul, 5, sizeof(int), &n_batch);
+    err  = clSetKernelArg(kernelmatmulInputCache, 0, sizeof(cl_mem), &d_input);
+    err  = clSetKernelArg(kernelmatmulInputCache, 1, sizeof(cl_mem), &d_filter);
+    err  = clSetKernelArg(kernelmatmulInputCache, 2, sizeof(cl_mem), &d_output);
+    err  = clSetKernelArg(kernelmatmulInputCache, 3, sizeof(int), &m_rows);
+    err  = clSetKernelArg(kernelmatmulInputCache, 4, sizeof(int), &m_cols);
+    err  = clSetKernelArg(kernelmatmulInputCache, 5, sizeof(int), &n_batch);
     
-    const size_t local[2] = { 8, 32 };
-    const size_t global[2] = { (size_t) ((d_output_depth/4-1)/8+1)*8, (size_t) ((output_height*output_width*batches-1)/32+1)*32 };
+    const size_t local[2] = { matmulWgHeight, matmulWgWidth };
+    const size_t global[2] = { (size_t) ((d_output_depth/4-1)/matmulWgHeight+1)*matmulWgHeight, (size_t) ((output_height*output_width*batches-1)/matmulWgWidth+1)*matmulWgWidth };
 
-    err = clEnqueueNDRangeKernel(queue, kernelmatmul, 2, NULL, global, local, 0, NULL, NULL);
+    err = clEnqueueNDRangeKernel(queue, kernelmatmulInputCache, 2, NULL, global, local, 0, NULL, NULL);
 
     clFinish(queue);
 
@@ -357,26 +359,26 @@ inline void OpenCLConv(const float* input_data, int input_size,
     clEnqueueUnmapMemObject(queue,d_output,(void *) host_result,0, NULL, NULL);
     clFinish(queue);
   }
-  else if((dim_sizes[6] < 8) && (dim_sizes[5] < 8) && (stride_width == 1) && (stride_height == 1) && (pad_width == 0) && (pad_height == 0)) {
-    int xsize = ((output_width-1)/16+1)*16;
-    int ysize = ((output_height-1)/8+1)*8;
+  else if((dim_sizes[6] < convWgHeight) && (dim_sizes[5] < convWgHeight) && (stride_width == 1) && (stride_height == 1) && (pad_width == 0) && (pad_height == 0)) {
+    int xsize = ((output_width-1)/convWgWidth+1)*convWgWidth;
+    int ysize = ((output_height-1)/convWgHeight+1)*convWgHeight;
 
-    err  = clSetKernelArg(kernellocalall, 0, sizeof(cl_mem), &d_input);
-    err  = clSetKernelArg(kernellocalall, 1, sizeof(cl_mem), &d_filter);
-    err  = clSetKernelArg(kernellocalall, 2, sizeof(cl_mem), &d_output);
-    err  = clSetKernelArg(kernellocalall, 3, sizeof(int), &stride_width);
-    err  = clSetKernelArg(kernellocalall, 4, sizeof(int), &stride_height);
-    err  = clSetKernelArg(kernellocalall, 5, sizeof(int), &pad_width);
-    err  = clSetKernelArg(kernellocalall, 6, sizeof(int), &pad_height);
-    err  = clSetKernelArg(kernellocalall, 7, sizeof(int), &xsize);
-    err  = clSetKernelArg(kernellocalall, 8, sizeof(int), &ysize);
-    err  = clSetKernelArg(kernellocalall, 9, sizeof(cl_mem), &d_dim_sizes);
-    err  = clSetKernelArg(kernellocalall, 10, sizeof(cl_mem), &d_dim_strides);
+    err  = clSetKernelArg(kernelconvFilterAndImageCache, 0, sizeof(cl_mem), &d_input);
+    err  = clSetKernelArg(kernelconvFilterAndImageCache, 1, sizeof(cl_mem), &d_filter);
+    err  = clSetKernelArg(kernelconvFilterAndImageCache, 2, sizeof(cl_mem), &d_output);
+    err  = clSetKernelArg(kernelconvFilterAndImageCache, 3, sizeof(int), &stride_width);
+    err  = clSetKernelArg(kernelconvFilterAndImageCache, 4, sizeof(int), &stride_height);
+    err  = clSetKernelArg(kernelconvFilterAndImageCache, 5, sizeof(int), &pad_width);
+    err  = clSetKernelArg(kernelconvFilterAndImageCache, 6, sizeof(int), &pad_height);
+    err  = clSetKernelArg(kernelconvFilterAndImageCache, 7, sizeof(int), &xsize);
+    err  = clSetKernelArg(kernelconvFilterAndImageCache, 8, sizeof(int), &ysize);
+    err  = clSetKernelArg(kernelconvFilterAndImageCache, 9, sizeof(cl_mem), &d_dim_sizes);
+    err  = clSetKernelArg(kernelconvFilterAndImageCache, 10, sizeof(cl_mem), &d_dim_strides);
 
-    const size_t local[2] = { 8, 16 };
+    const size_t local[2] = { convWgHeight, convWgWidth };
     const size_t global[2] = { (size_t) ysize*batches, (size_t) xsize*d_output_depth/4 };
     
-    err = clEnqueueNDRangeKernel(queue, kernellocalall, 2, NULL, global, local, 0, NULL, NULL);
+    err = clEnqueueNDRangeKernel(queue, kernelconvFilterAndImageCache, 2, NULL, global, local, 0, NULL, NULL);
 
     clFinish(queue);
 
@@ -398,48 +400,6 @@ inline void OpenCLConv(const float* input_data, int input_size,
     clEnqueueUnmapMemObject(queue,d_output,(void *) host_result,0, NULL, NULL);
     clFinish(queue);
   }
-  else {
-    int xsize = ((output_width-1)/16+1)*16;
-    int ysize = ((output_height-1)/8+1)*8;
-
-    err  = clSetKernelArg(kernellocalfilter, 0, sizeof(cl_mem), &d_input);
-    err  = clSetKernelArg(kernellocalfilter, 1, sizeof(cl_mem), &d_filter);
-    err  = clSetKernelArg(kernellocalfilter, 2, sizeof(cl_mem), &d_output);
-    err  = clSetKernelArg(kernellocalfilter, 3, sizeof(int), &stride_width);
-    err  = clSetKernelArg(kernellocalfilter, 4, sizeof(int), &stride_height);
-    err  = clSetKernelArg(kernellocalfilter, 5, sizeof(int), &pad_width);
-    err  = clSetKernelArg(kernellocalfilter, 6, sizeof(int), &pad_height);
-    err  = clSetKernelArg(kernellocalfilter, 7, sizeof(int), &xsize);
-    err  = clSetKernelArg(kernellocalfilter, 8, sizeof(int), &ysize);
-    err  = clSetKernelArg(kernellocalfilter, 9, sizeof(cl_mem), &d_dim_sizes);
-    err  = clSetKernelArg(kernellocalfilter, 10, sizeof(cl_mem), &d_dim_strides);
-
-    const size_t local[2] = { 8, 16 };
-    const size_t global[2] = { (size_t) ysize*batches, (size_t) xsize*d_output_depth/4 };
-    
-    err = clEnqueueNDRangeKernel(queue, kernellocalfilter, 2, NULL, global, local, 0, NULL, NULL);
-
-    clFinish(queue);
-
-    cl_float *host_result = (cl_float*)clEnqueueMapBuffer(
-            queue,
-            d_output,
-            CL_TRUE,
-            CL_MAP_READ,
-            0,
-            output_size/output_depth*d_output_depth*sizeof(float),
-            0, NULL, NULL, NULL);
-
-    for(int i = 0; i < output_size/output_depth; i++) {
-      for(int j = 0; j < output_depth; j++) {
-        output_data[i*output_depth + j] = host_result[i*d_output_depth + j];
-      }
-    }
-
-    clEnqueueUnmapMemObject(queue,d_output,(void *) host_result,0, NULL, NULL);
-    clFinish(queue);
-  }
-
 }
 
 inline void Conv(const float* input_data, const Dims<4>& input_dims,
@@ -589,11 +549,9 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
                  float* im2col_data, const Dims<4>& im2col_dims,
                  cl_context context_cl, cl_command_queue queue, cl_program program, cl_mem cl_mem_arr[6]) {
   
-  if((kernelconv == NULL) || (kernelmatmul == NULL) || (kernellocalfilter == NULL) || (kernellocalall == NULL)) {
-    kernelconv = clCreateKernel(program, "convfloat", NULL);
-    kernelmatmul = clCreateKernel(program, "convmatmulblock", NULL);
-    kernellocalall = clCreateKernel(program, "convlocalall", NULL);
-    kernellocalfilter = clCreateKernel(program, "convlocalfilter", NULL);
+  if((kernelmatmulInputCache == NULL) || (kernelconvFilterAndImageCache == NULL)) {
+    kernelmatmulInputCache = clCreateKernel(program, "matmulInputCache", NULL);
+    kernelconvFilterAndImageCache = clCreateKernel(program, "convFilterAndImageCache", NULL);
   }
 
   const int batches = MatchingArraySize(input_dims, 3, output_dims, 3);
@@ -612,7 +570,6 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
   sizes = (int*)malloc(16*sizeof(int));
   strides = (int*)malloc(16*sizeof(int));
 
-/////////////////////////////////////////
   //input
   sizes[0] = input_dims.sizes[0];
   sizes[1] = input_dims.sizes[1];
