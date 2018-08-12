@@ -62,9 +62,7 @@ cc_test(
 cc_library(
     name = "context",
     srcs = ["context.c"],
-    hdrs = ["context.h",
-    "CL/cl.h",
-    "CL/cl_platform.h",],
+    hdrs = ["context.h"],
 )
 
 cc_library(

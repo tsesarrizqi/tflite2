@@ -35,12 +35,8 @@ limitations under the License.
 #include <assert.h>
 #include <stdexcept>
 #include <cmath>
-
-#include "shaderc/shaderc.hpp"
-
 #include <string>
 #include <iostream>
-
 #include <android/log.h> 
 #include <stdio.h> 
 
@@ -60,10 +56,6 @@ cl_mem d_conv_dim_strides = NULL;
 int buffsizes[4] = {4200000, 2100000, 1024, 4200000};
 
 const char *kernelSource =           "\n" \
-"#define CONV_WG_HEIGHT 8 "
-"#define CONV_WG_WIDTH 16 "
-"#define MATMUL_WG_HEIGHT 8 "
-"#define MATMUL_WG_WIDTH 32 "
 "__kernel void convFilterAndImageCache(__global float4* input_data,    \n" \
 "          __global float4* filter_data,    \n" \
 "          __global float4* output_data,   \n" \
@@ -73,7 +65,7 @@ const char *kernelSource =           "\n" \
 "          __global int* dim_sizes, __global int* dim_strides) {   \n" \
 "     \n" \
 "    __local float4 localfilter[CONV_WG_HEIGHT][4*CONV_WG_HEIGHT]; \n" \
-"    __local float4 localinput[2*MATMUL_WG_HEIGHT][MATMUL_WG_HEIGHT+MATMUL_WG_WIDTH]; \n" \
+"    __local float4 localinput[2*CONV_WG_HEIGHT][CONV_WG_HEIGHT+CONV_WG_WIDTH]; \n" \
 "    int local_y = get_local_id(0);   \n" \
 "    int local_x = get_local_id(1);   \n" \
 "    int ychannel = get_global_id(0);   \n" \
@@ -119,9 +111,9 @@ const char *kernelSource =           "\n" \
 "                float4 input_value = localinput[in_y][in_x];\n" \
 "                //float4 input_value = input_data[in_channel*dim_strides[0] + in_x*dim_strides[1]/4 + in_y*dim_strides[2]/4 + batch*dim_strides[3]/4];   \n" \
 "                total.x += dot(input_value,localfilter[filter_y][filter_x]);   \n" \
-"                total.y += dot(input_value,localfilter[filter_y][filter_x + CONV_WG_WIDTH]);   \n" \
-"                total.z += dot(input_value,localfilter[filter_y][filter_x + 2*CONV_WG_WIDTH]);   \n" \
-"                total.w += dot(input_value,localfilter[filter_y][filter_x + 3*CONV_WG_WIDTH]);   \n" \
+"                total.y += dot(input_value,localfilter[filter_y][filter_x + CONV_WG_HEIGHT]);   \n" \
+"                total.z += dot(input_value,localfilter[filter_y][filter_x + 2*CONV_WG_HEIGHT]);   \n" \
+"                total.w += dot(input_value,localfilter[filter_y][filter_x + 3*CONV_WG_HEIGHT]);   \n" \
 "              }   \n" \
 "            }   \n" \
 "          }   \n" \
@@ -727,7 +719,7 @@ void initOpenCL() {
   program = clCreateProgramWithSource(context_cl, 1,
                           (const char **) & kernelSource, NULL, &err);
 
-  clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
+  clBuildProgram(program, 0, NULL, "-DCONV_WG_HEIGHT=8 -DCONV_WG_WIDTH=16 -DMATMUL_WG_HEIGHT=8 -DMATMUL_WG_WIDTH=32", NULL, NULL);
  
   d_conv_input = clCreateBuffer(context_cl, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, buffsizes[0]*sizeof(float), NULL, NULL);
   d_conv_filter = clCreateBuffer(context_cl, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, buffsizes[1]*sizeof(float), NULL, NULL);

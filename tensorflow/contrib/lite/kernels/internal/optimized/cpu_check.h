@@ -16,7 +16,7 @@ limitations under the License.
 #define TENSORFLOW_CONTRIB_LITE_KERNELS_INTERNAL_OPTIMIZED_CPU_CHECK_
 
 //note: android opencl
-#include "../CL/cl.h"
+#include "CL/cl.h"
 
 namespace tflite {
 

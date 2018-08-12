@@ -23,7 +23,7 @@ limitations under the License.
 #include <stdlib.h> 
 #include <math.h>
 
-#include "../CL/cl.h"
+#include "CL/cl.h"
 
 namespace tflite {
 namespace tensor_utils {

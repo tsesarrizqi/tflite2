@@ -26,32 +26,22 @@ limitations under the License.
 #include <tuple>
 #include <type_traits>
 
+#include "CL/cl.h"
+
 #include <vector>
 #include <string.h>
 #include <assert.h>
 #include <stdexcept>
 #include <cmath>
-
-#include "../CL/cl.h"
-
 #include <android/log.h> 
 #include <stdio.h> 
 #include <stdlib.h> 
 #include <math.h>
-
-#include <string>
-#include <iostream>
-
-#include <string>
-
 #include <fstream>
 #include <iostream>
 #include <vector>
-
 #include <time.h>
 #include <sys/time.h>
-
-#include "halftmp/half.hpp"
 
 #include "tensorflow/contrib/lite/builtin_op_data.h"
 #include "tensorflow/contrib/lite/kernels/internal/common.h"
@@ -341,6 +331,8 @@ inline void OpenCLConv(const float* input_data, int input_size,
 
     clFinish(queue);
 
+    __android_log_print(ANDROID_LOG_INFO, "OpenCLDebug", "Error Kernel: %d", err);
+
     cl_float *host_result = (cl_float*)clEnqueueMapBuffer(
             queue,
             d_output,
@@ -381,6 +373,8 @@ inline void OpenCLConv(const float* input_data, int input_size,
     err = clEnqueueNDRangeKernel(queue, kernelconvFilterAndImageCache, 2, NULL, global, local, 0, NULL, NULL);
 
     clFinish(queue);
+
+    __android_log_print(ANDROID_LOG_INFO, "OpenCLDebug", "Error Kernel: %d", err);
 
     cl_float *host_result = (cl_float*)clEnqueueMapBuffer(
             queue,
@@ -630,6 +624,16 @@ inline void ConvOpenCL(const float* input_data, const Dims<4>& input_dims,
     optimized_ops::AddBiasAndEvalActivationFunction(
       bias_data, bias_dims, output_data, output_dims, output_activation_min,
       output_activation_max);
+
+    // Conv(input_data, input_dims,
+    //     filter_data2, filter_dims,
+    //     bias_data, bias_dims,
+    //     stride_width, stride_height, 
+    //     pad_width, pad_height, 
+    //     padding,
+    //     output_activation_min, output_activation_max,
+    //     output_data, output_dims,
+    //     im2col_data, im2col_dims);
   }
   else if((sizes[6] < 8) && (sizes[5] < 8) && (stride_width == 1) && (stride_height == 1) && (pad_width == 0) && (pad_height == 0)) {
     OpenCLConv(input_data, input_size,

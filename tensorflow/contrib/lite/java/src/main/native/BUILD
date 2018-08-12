@@ -29,8 +29,6 @@ cc_library(
         "nativeinterpreterwrapper_jni.h",
         "tensor_jni.h",
         "tensorflow_lite_jni.h",
-        "//tensorflow/contrib/lite:CL/cl.h",
-        "//tensorflow/contrib/lite:CL/cl_platform.h",
     ],
     copts = tflite_copts(),
     includes = select({

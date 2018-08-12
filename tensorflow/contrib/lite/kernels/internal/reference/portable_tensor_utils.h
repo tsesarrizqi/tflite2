@@ -19,7 +19,7 @@ limitations under the License.
 // structure.
 #include "tensorflow/contrib/lite/builtin_op_data.h"
 
-#include "../CL/cl.h"
+#include "CL/cl.h"
 
 namespace tflite {
 namespace tensor_utils {

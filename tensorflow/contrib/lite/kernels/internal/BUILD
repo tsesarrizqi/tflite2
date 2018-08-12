@@ -253,8 +253,6 @@ cc_library(
     ],
     hdrs = [
         "reference/portable_tensor_utils.h",
-        "CL/cl.h",
-        "CL/cl_platform.h",
     ],
     deps = [
         "//tensorflow/contrib/lite:builtin_op_data",
@@ -273,8 +271,6 @@ cc_library(
         "optimized/cpu_check.h",
         "optimized/neon_tensor_utils.h",
         "optimized/tensor_utils_impl.h",
-        "CL/cl_platform.h",
-        "CL/cl.h",
     ],
     copts = NEON_FLAGS_IF_APPLICABLE,
     deps = [
@@ -305,8 +301,6 @@ cc_library(
         "reference/portable_tensor_utils.h",
         "tensor_utils.h",
         "types.h",
-        "CL/cl.h",
-        "CL/cl_platform.h",
     ],
     copts = NEON_FLAGS_IF_APPLICABLE,
     deps = [

@@ -15,7 +15,7 @@ limitations under the License.
 #ifndef TENSORFLOW_CONTRIB_LITE_KERNELS_INTERNAL_OPTIMIZED_NEON_TENSOR_UTILS_H_
 #define TENSORFLOW_CONTRIB_LITE_KERNELS_INTERNAL_OPTIMIZED_NEON_TENSOR_UTILS_H_
 
-#include "../CL/cl.h"
+#include "CL/cl.h"
 
 // TODO(ghodrat): Remove this header file and the dependency to internal data
 // structure.

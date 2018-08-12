@@ -18,7 +18,7 @@ limitations under the License.
 // TDOD(ghodrat): Remove this header file and the dependency to internal data
 // structure.
 #include "tensorflow/contrib/lite/builtin_op_data.h"
-#include "../CL/cl.h"
+#include "CL/cl.h"
 
 #ifndef USE_NEON
 #if defined(__ARM_NEON__) || defined(__ARM_NEON)

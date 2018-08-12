@@ -139,9 +139,6 @@ cc_library(
     hdrs = [
         "padding.h",
         "register.h",
-        "CL/cl.h",
-        "CL/cl_platform.h",
-        "opencl_cl_files.h",
     ],
     # Suppress warnings that are introduced by Eigen Tensor.
     copts = tflite_copts() + [

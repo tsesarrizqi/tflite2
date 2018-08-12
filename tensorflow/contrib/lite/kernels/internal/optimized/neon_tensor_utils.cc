@@ -19,31 +19,24 @@ limitations under the License.
 #include "tensorflow/contrib/lite/kernels/activation_functor.h"
 #include "tensorflow/contrib/lite/kernels/internal/optimized/tensor_utils_impl.h"
 
+#include "CL/cl.h"
+
 #include <string>
 #include <cstring>
-
 #include <fstream>
 #include <iostream>
 #include <vector>
-
 #include <android/log.h> 
 #include <stdio.h> 
 #include <stdlib.h> 
 #include <math.h>
-
-#include "../CL/cl.h"
 #include <sys/stat.h>
-
 #include <vector>
-#include <string.h>
 #include <assert.h>
 #include <stdexcept>
 #include <cmath>
-
 #include <time.h>
 #include <sys/time.h>
-
-#include "halftmp/half.hpp"
 
 #ifdef USE_NEON
 
@@ -121,7 +114,7 @@ void OpenCLPortableMatrixBatchVectorMultiplyAccumulate(const float* matrix,
   cl_kernel kernel;
   cl_int err;
 
-  kernel = clCreateKernel(program, "convmatmulblock", &err);
+  kernel = clCreateKernel(program, "matmulInputCache", &err);
 
   int numchannel = m_cols;
   int addslot = (4-(numchannel%4))%4;

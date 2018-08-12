@@ -34,10 +34,6 @@ limitations under the License.
 //note: android opencl
 #include "CL/cl.h"
 
-//note: shaderc
-// #include "shaderc/shaderc.hpp"
-// include shader bermasalah
-
 #ifdef __cplusplus
 extern "C" {
 #endif  // __cplusplus
